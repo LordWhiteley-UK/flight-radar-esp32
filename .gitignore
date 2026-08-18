@@ -1,0 +1,28 @@
+# Build artefacts
+src/build/
+src/.cache/
+src/sdkconfig.old
+src/sdkconfig
+src/dependencies.lock
+src/flightradar_sim_config.json
+
+# IDE / tool config
+src/.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets — never commit
+*.pem
+*.key
+secrets.h
+.env
+.env.local
+
+# Logs
+*.log
