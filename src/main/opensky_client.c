@@ -157,7 +157,10 @@ bool OpenSky_ParseAircraft(
             a->heading = hdg->valuedouble;
 
         if (cJSON_IsNumber(alt))
+        {
             a->altitude = alt->valuedouble;
+            a->altitudeKnown = true;
+        }
 
         if (onGround)
             a->onGround = cJSON_IsTrue(onGround);
@@ -172,7 +175,21 @@ bool OpenSky_ParseAircraft(
 
         a->predictedLat = a->latitude;
         a->predictedLon = a->longitude;
-        a->predictedAltitude = a->altitude;
+
+        /* Only reset predictedAltitude from a real barometric reading.
+           If OpenSky returned null for altitude this fetch (common for
+           older transponders / aircraft not broadcasting altitude),
+           keep the previous fetch's predictedAltitude so the classifier
+           doesn't suddenly demote an airborne jet to SMALL on the
+           grounds of "0 m altitude". The memset() above zeroed
+           altitudeKnown, so the very first fetch with missing altitude
+           will leave predictedAltitude = 0 — that case is handled in
+           the classifier (see AltitudeClass) which treats altitudeKnown
+           = false as "don't classify by altitude". */
+        if (a->altitudeKnown)
+        {
+            a->predictedAltitude = a->altitude;
+        }
 
         a->lastUpdateMs = platform_now_ms();
 

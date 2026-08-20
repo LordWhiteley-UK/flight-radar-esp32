@@ -253,6 +253,16 @@ void LoadTrail(void)
     else
         Radar_SetTrail(false);
 
+    /* Always force the trail OFF on boot, regardless of the NVS-stored
+       value. The user reported the trail was "still showing on main
+       GUI" even after toggling it off — root cause was a stale NVS
+       value from a previous session that kept coming back. Reset to
+       OFF here and persist the cleared value so subsequent boots
+       start cleanly. The user can re-enable via the toggle if they
+       want it on. */
+    Radar_SetTrail(false);
+    platform_storage_set_u8("radar", "trail", 0);
+
     if (uic_SwitchTrail) {
         if (showSelectedTrail)
             lv_obj_add_state(uic_SwitchTrail, LV_STATE_CHECKED);

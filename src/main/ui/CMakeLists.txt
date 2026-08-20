@@ -10,6 +10,9 @@ SET(SOURCES screens/ui_Screen2.c
     images/ui_img_flight_png.c
     images/ui_img_refresh_24_png.c
     images/ui_img_edit_24_png.c
-    images/ui_img_settings_png.c)
+    images/ui_img_settings_png.c
+    images/ui_img_aircraft_small_png.c
+    images/ui_img_aircraft_medium_png.c
+    images/ui_img_aircraft_large_png.c)
 
 add_library(ui ${SOURCES})

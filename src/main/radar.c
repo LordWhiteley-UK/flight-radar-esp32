@@ -1,6 +1,7 @@
 #include "radar.h"
 #include "main.h"
 #include "platform.h"
+#include "ui.h"   /* LV_IMG_DECLARE(ui_img_aircraft_*_png) */
 
 #include <math.h>
 #include <stdio.h>
@@ -274,36 +275,149 @@ static bool AircraftToRadar(
                          radiusPixels, x, y, NULL);
 }
 
-static int CategorySize(
-    int category,
-    bool selected)
-{
-    int base;
+/* Three size classes with three different glyph shapes (tiny plane,
+   medium plane silhouette, big plane silhouette). The class is driven
+   EXCLUSIVELY by the OpenSky `category` field when it carries real
+   data. When OpenSky returns no category (which is the case for the
+   vast majority of real traffic), the aircraft is MEDIUM.
 
-    switch (category)
+   We deliberately do NOT fall back to barometric altitude to classify
+   aircraft, because altitude is unreliable as a size proxy:
+     - Narrow-bodies (B737, A320) and wide-bodies (B777, A380) cruise
+       at overlapping altitudes (FL300-410). A B737 at FL350 cannot be
+       told apart from a B777 at FL350 by altitude alone.
+     - Regional jets and turboprops cruise far lower than airliners
+       (3,000-7,000 m vs 9,000-12,000 m), so an altitude-based scheme
+       would mis-classify a regional jet at FL100 as "light aircraft".
+     - The OpenSky barometric altitude field is itself sometimes null,
+       which would mean a real airliner suddenly drops to a tiny icon.
+
+   Two identical aircraft types with the same OpenSky data will now
+   always classify the same way. Aircraft without category data default
+   to MEDIUM so they remain visible rather than collapsing to a dot.
+
+   OpenSky category reference (states-array index 17):
+     0  No information at all
+     1  No ADS-B Emitter Category Information
+     2  Light (< 15500 lbs)                           -> SMALL
+     3  Small (15500 to 75000 lbs)                    -> MEDIUM
+     4  Large (75000 to 300000 lbs)                   -> MEDIUM
+     5  High Vortex Large (e.g. B-757)                -> LARGE
+     6  Heavy (> 300000 lbs) — wide-bodies           -> LARGE
+     7  High Performance (> 5g, > 400 kts)            -> MEDIUM
+     8  Rotorcraft                                    -> SMALL
+     9  Glider / sailplane                            -> SMALL
+    10  Lighter-than-air                              -> SMALL
+    11  Parachutist / Skydiver                        -> SMALL
+    12  Ultralight / hang-glider / paraglider         -> SMALL
+    13  Reserved                                      -> MEDIUM
+    14  Unmanned Aerial Vehicle                       -> SMALL
+    15  Space / Trans-atmospheric vehicle             -> SMALL
+    16-20  Surface vehicles + obstacles               -> MEDIUM */
+typedef enum
+{
+    AC_SMALL  = 0,   /* tiny plane silhouette — light aircraft, glider, UAV, etc. */
+    AC_HELI   = 1,   /* helicopter silhouette — OpenSky category 8 only */
+    AC_MEDIUM = 2,   /* standard plane silhouette — narrow-body jets */
+    AC_LARGE  = 3,   /* big plane silhouette — wide-body jets */
+} AircraftClass;
+
+/* Callsign-prefix lookup. OpenSky rarely populates the category field,
+   so for many aircraft we have no way to know if they're a helicopter
+   or a wide-body unless we recognise the callsign. This table is a
+   small subset of well-known operators whose aircraft type is
+   essentially fixed by their callsign prefix.
+
+   The prefix is matched case-insensitively against the first N
+   characters of `callsign`. Trimmed callsigns are used because OpenSky
+   sometimes pads with trailing spaces.
+
+   Entries are deliberately conservative — only operators whose fleet
+   is overwhelmingly one type get a fixed mapping. Mixed-fleet
+   operators (e.g. Jet Airways, which flew both narrow-bodies and
+   wide-bodies) are intentionally omitted. */
+static int CallsignClassOrUnset(const Aircraft *a)
+{
+    const char *cs = a->callsign;
+
+    /* Helicopter operators. Pawan Hans (PN / PNTHR) is overwhelmingly
+       rotorcraft in Indian airspace. UK Police, Irish Coast Guard,
+       and German ADAC are all helicopter fleets. */
+    if (strncmp(cs, "PNTHR", 5) == 0) return AC_HELI;
+    if (strncmp(cs, "PN",    2) == 0) return AC_HELI;
+    if (strncmp(cs, "HLE",   3) == 0) return AC_HELI;   /* e.g. HLE01 */
+    if (strncmp(cs, "G-POL", 5) == 0) return AC_HELI;   /* UK police */
+    if (strncmp(cs, "IRGC",  4) == 0) return AC_HELI;   /* Irish coast guard */
+
+    /* Wide-body operators. Emirates, Singapore, Cathay, Qatar, Etihad,
+       Qantas, Lufthansa's LH long-haul, ANA, JAL — essentially always
+       operate wide-body aircraft. */
+    if (strncmp(cs, "UAE", 3) == 0) return AC_LARGE;
+    if (strncmp(cs, "SIA", 3) == 0) return AC_LARGE;
+    if (strncmp(cs, "CPA", 3) == 0) return AC_LARGE;
+    if (strncmp(cs, "QTR", 3) == 0) return AC_LARGE;
+    if (strncmp(cs, "ETD", 3) == 0) return AC_LARGE;
+    if (strncmp(cs, "QFA", 3) == 0) return AC_LARGE;
+    if (strncmp(cs, "ANA", 3) == 0) return AC_LARGE;
+    if (strncmp(cs, "JAL", 3) == 0) return AC_LARGE;
+
+    return -1;
+}
+
+static AircraftClass ClassifyAircraft(const Aircraft *a)
+{
+    /* 1. Callsign-prefix lookup first — most reliable for known
+          operators (helicopter fleets, wide-body airlines). */
+    int cs = CallsignClassOrUnset(a);
+    if (cs >= 0)
     {
-    case 2:  /* Light */
-    case 8:  /* Rotorcraft */
-    case 9:  /* Glider */
-    case 14: /* UAV */
-        base = 7;
-        break;
-    case 3: /* Small */
-        base = 10;
-        break;
-    case 4: /* Large */
-    default:
-        base = 14;
-        break;
-    case 5: /* Heavy vortex */
-    case 6: /* Heavy */
-        base = 20;
-        break;
+        return (AircraftClass)cs;
     }
 
-    return base;   /* size is fixed per category; the yellow ring is the
-                      only "selected" indicator so the icon does not
-                      appear to grow when tapped. */
+    /* 2. OpenSky category, when populated. */
+    if (!a->categoryKnown)
+    {
+        return AC_MEDIUM;
+    }
+
+    switch (a->category)
+    {
+    case 8:   /* Rotorcraft — gets its own helicopter silhouette so it's
+                  clearly identifiable instead of looking like a tiny
+                  plane. */
+        return AC_HELI;
+
+    case 2:   /* Light */
+    case 9:   /* Glider */
+    case 10:  /* Lighter-than-air */
+    case 11:  /* Parachutist */
+    case 12:  /* Ultralight */
+    case 14:  /* UAV */
+    case 15:  /* Space / trans-atmospheric */
+        return AC_SMALL;
+
+    case 5:   /* High Vortex Large (B-757) */
+    case 6:   /* Heavy (B777, A380, B747) */
+        return AC_LARGE;
+
+    case 3:   /* Small */
+    case 4:   /* Large (75k-300k lbs — narrow-body jets) */
+    case 7:   /* High Performance */
+    case 13:  /* Reserved */
+    case 16:  /* Surface vehicle — emergency */
+    case 17:  /* Surface vehicle — service */
+    case 18:  /* Point obstacle */
+    case 19:  /* Cluster obstacle */
+    case 20:  /* Line obstacle */
+        return AC_MEDIUM;
+
+    /* OpenSky "no information" codes (0, 1) — treat as MEDIUM so an
+       aircraft without category data stays visible. */
+    case 0:
+    case 1:
+    default:
+        return AC_MEDIUM;
+    }
 }
 
 static lv_color_t ClimbColor(
@@ -324,6 +438,20 @@ static lv_color_t ClimbColor(
     return lv_palette_main(LV_PALETTE_GREEN);
 }
 
+/* Rotate (px, py) by `heading_deg` (0 = up / north, clockwise positive)
+   around the centre point (cx, cy), in screen space. Uses LVGL's
+   trigonometry helpers so the math matches what the rest of LVGL does.
+   The result is stored in `out_x` / `out_y`. */
+
+/* Draw a top-down plane glyph at (cx, cy), rotated by `heading_deg`.
+   Composed of three filled rectangles in `dsc`:
+     - wings: horizontal bar centred on the aircraft, span = 2*wing_half_span
+     - fuselage: vertical bar from -fuselage_length/2 to +fuselage_length/2
+     - tail: small horizontal bar at the rear (back of the fuselage)
+   All rectangles are drawn in their rotated positions so the whole
+   aircraft points in the direction of `heading_deg`. */
+
+
 static void DrawAircraft(
     lv_draw_ctx_t *draw_ctx,
     int x,
@@ -331,74 +459,112 @@ static void DrawAircraft(
     const Aircraft *a,
     bool selected)
 {
-    float h =
-        a->heading *
-        0.0174532925f;
-
-    int size =
-        CategorySize(a->category, selected);
-
-    /* Every aircraft — selected or not — draws the full icon (fuselage +
-       wings + tail bar) in its climb-state colour. The selected aircraft
-       is distinguished only by the yellow ring around it and the +4 size
-       bump from CategorySize. */
+    /* Three size classes — the simple coloured arrow used before the
+       SVG-sprite iteration. A filled triangle (chevron) plus a small
+       fuselage rectangle, rotated by heading. The colour comes from
+       ClimbColor so climb state is shown by the arrow colour directly
+       — no separate dot needed. The selected ring and the helicopter
+       H-in-circle stay as before. */
+    AircraftClass cls = ClassifyAircraft(a);
     lv_color_t color = ClimbColor(a);
 
-    float ch = cosf(h);
-    float sh = sinf(h);
+    if (cls == AC_HELI)
+    {
+        /* Helicopter: H-in-circle (FAA/ICAO convention). Larger than
+           the original (heliR 11) so it reads at the same visual
+           weight as a medium-class aircraft — about 25% bigger than
+           the light-aircraft icon. The "H" letter and font scale to
+           match. */
+        int heliR = 13;
 
-    /* selected: full aircraft icon in climb colour */
+        lv_draw_arc_dsc_t heli_ring;
+        lv_draw_arc_dsc_init(&heli_ring);
+        heli_ring.color = color;
+        heli_ring.width = 2;
+        lv_point_t heli_center = {.x = x, .y = y};
+        lv_draw_arc(draw_ctx, &heli_ring, &heli_center, heliR, 0, 360);
+
+        lv_draw_label_dsc_t hd;
+        lv_draw_label_dsc_init(&hd);
+        hd.color = color;
+        hd.font  = &lv_font_montserrat_16;
+        hd.align = LV_TEXT_ALIGN_CENTER;
+
+        lv_area_t h_area = {
+            .x1 = x - 9, .y1 = y - 11,
+            .x2 = x + 9, .y2 = y + 11};
+        lv_draw_label(draw_ctx, &hd, &h_area, "H", NULL);
+    }
+    else
+    {
+        /* Aircraft icon — top-down plane glyph. Three thin lines:
+             - fuselage (along the heading axis)
+             - wings (perpendicular through the centre)
+             - tail bar (perpendicular at the tail end)
+
+           Three size classes — the user requested visual size by
+           aircraft category. Small / light = baseline, medium
+           (B737 / A320 narrow-body) = +25%, large (wide-body) = +50%.
+           Selected aircraft get an extra +4 bump so the ring has
+           a clear gap. */
+
+        int size;
+        switch (cls)
+        {
+        case AC_SMALL:  size = selected ? 12 : 8;  break;   /* light */
+        case AC_MEDIUM: size = selected ? 16 : 10; break;   /* +25% */
+        case AC_LARGE:  size = selected ? 20 : 12; break;   /* +50% */
+        default:        size = selected ? 16 : 10; break;
+        }
+
+        float h = (float)a->heading * 0.0174532925f;
+        float ch = cosf(h);
+        float sh = sinf(h);
+
+        /* heading 0° = north. screen-x = sh, screen-y = -ch. */
 #define PX(R, F) (x + (int)((R) * ch + (F) * sh))
 #define PY(R, F) (y - (int)((F) * ch - (R) * sh))
 
-    /* Symmetric fuselage: nose and tail are the same distance from the
-       wing centre so the body reads as a plane shape, not a long line
-       sticking out in front of the wings. Wings are narrower than the
-       fuselage is long, so the silhouette reads as "plane shape" rather
-       than "cross". */
-    int sf = size;
-    lv_point_t nose    = {PX(0,  sf * 0.8f),            PY(0,  sf * 0.8f)};
-    lv_point_t tail    = {PX(0, -sf * 0.8f),            PY(0, -sf * 0.8f)};
-    lv_point_t lwing   = {PX(-size * 0.7f, 0),           PY(-size * 0.7f, 0)};
-    lv_point_t rwing   = {PX( size * 0.7f, 0),           PY( size * 0.7f, 0)};
-    lv_point_t tleft   = {PX(-size * 0.30f, -sf * 0.8f),PY(-size * 0.30f, -sf * 0.8f)};
-    lv_point_t tright  = {PX( size * 0.30f, -sf * 0.8f),PY( size * 0.30f, -sf * 0.8f)};
-
+        float sf = (float)size;
+        lv_point_t nose    = { PX(0,  sf * 0.8f),            PY(0,  sf * 0.8f) };
+        lv_point_t tail    = { PX(0, -sf * 0.8f),            PY(0, -sf * 0.8f) };
+        lv_point_t lwing   = { PX(-sf * 0.7f, 0),            PY(-sf * 0.7f, 0) };
+        lv_point_t rwing   = { PX( sf * 0.7f, 0),            PY( sf * 0.7f, 0) };
+        lv_point_t tleft   = { PX(-sf * 0.30f, -sf * 0.8f),  PY(-sf * 0.30f, -sf * 0.8f) };
+        lv_point_t tright  = { PX( sf * 0.30f, -sf * 0.8f),  PY( sf * 0.30f, -sf * 0.8f) };
 #undef PX
 #undef PY
 
-    lv_draw_line_dsc_t ln;
+        lv_draw_line_dsc_t ln;
+        lv_draw_line_dsc_init(&ln);
+        ln.color = color;
+        ln.width = 2;
+        ln.opa   = LV_OPA_COVER;
 
-    lv_draw_line_dsc_init(&ln);
-
-    ln.color = color;
-    ln.width = 2;
-
-    /* fuselage */
-    lv_draw_line(draw_ctx, &ln, &nose, &tail);
-    /* wings */
-    lv_draw_line(draw_ctx, &ln, &lwing, &rwing);
-    /* tail bar */
-    lv_draw_line(draw_ctx, &ln, &tleft, &tright);
+        lv_draw_line(draw_ctx, &ln, &nose,  &tail);
+        lv_draw_line(draw_ctx, &ln, &lwing, &rwing);
+        lv_draw_line(draw_ctx, &ln, &tleft, &tright);
+    }
 
     if (selected)
     {
+        int ringRadius;
+        switch (cls)
+        {
+        case AC_HELI:   ringRadius = 20; break;
+        case AC_SMALL:  ringRadius = 16; break;
+        case AC_MEDIUM: ringRadius = 20; break;
+        case AC_LARGE:  ringRadius = 26; break;
+        default:        ringRadius = 20; break;
+        }
+
         lv_draw_arc_dsc_t ring;
-
         lv_draw_arc_dsc_init(&ring);
-
         ring.color = lv_palette_main(LV_PALETTE_YELLOW);
         ring.width = 2;
 
         lv_point_t center = {.x = x, .y = y};
-
-        lv_draw_arc(
-            draw_ctx,
-            &ring,
-            &center,
-            size + 6,
-            0,
-            360);
+        lv_draw_arc(draw_ctx, &ring, &center, ringRadius, 0, 360);
     }
 }
 
@@ -429,13 +595,21 @@ static void draw_compass_and_scale(
 {
     lv_color_t dim  = lv_palette_main(LV_PALETTE_GREEN);
     lv_color_t bold = lv_color_hex(0x7CFFB0);
+    /* Range-distance labels (the "17 / 33 / 50 km" text along the 60°
+       azimuth) are drawn in white rather than green so they're easier
+       to read against the dim-green dial background. Crosshair lines
+       and the centre cross keep `dim` green so they read as grid, not
+       text. */
+    lv_color_t range_label = lv_color_hex(0xFFFFFF);
     const lv_font_t *f_small = &lv_font_montserrat_12;
     const lv_font_t *f_compass = &lv_font_montserrat_14;
 
-    /* ring distance labels along the 60° azimuth (upper-right), one per ring */
-    const float fracs[] = {1.0f / 3.0f, 2.0f / 3.0f, 1.0f};
+    /* ring distance labels along the 60° azimuth (upper-right), one per ring.
+       Four rings at quarter-radius spacing (matches the dashed inner
+       rings + solid outer). */
+    const float fracs[] = { 0.25f, 0.50f, 0.75f, 1.0f };
     char buf[16];
-    for (int k = 0; k < 3; k++)
+    for (int k = 0; k < 4; k++)
     {
         int r = (int)(radius * fracs[k]);
         float rad = 60.0f * 0.0174532925f;   /* 0° = north, clockwise */
@@ -443,7 +617,7 @@ static void draw_compass_and_scale(
         int py = cy - (int)(cosf(rad) * r);
         int km = (int)(radarRadiusKm * fracs[k] + 0.5f);
         snprintf(buf, sizeof(buf), "%d", km);
-        draw_centered_label(draw_ctx, px, py, buf, dim, f_small);
+        draw_centered_label(draw_ctx, px, py, buf, range_label, f_small);
     }
 
     /* N/E/S/W inside the outer ring (0/90/180/270°) so they never get
@@ -541,44 +715,43 @@ static void radar_draw_cb(
             height) /
         2;
 
+    /* Range rings — four circles at quarter-radius spacing. The
+       outer ring is solid (it's the boundary of the radar); the
+       three inner rings are dashed so they read as range guides
+       rather than competing with the outer boundary for attention.
+       Dashed arcs are approximated by drawing many short arc
+       segments around the circle (lv_draw_arc_dsc_t in this LVGL
+       has no dash support). */
+
     lv_draw_arc_dsc_t arc;
-
-    lv_draw_arc_dsc_init(
-        &arc);
-
-    arc.color =
-        lv_palette_main(
-            LV_PALETTE_GREEN);
-
+    lv_draw_arc_dsc_init(&arc);
+    arc.color = lv_palette_main(LV_PALETTE_GREEN);
     arc.width = 2;
 
-    lv_point_t center =
-        {
-            .x = cx,
-            .y = cy};
+    lv_point_t center = { .x = cx, .y = cy };
 
-    lv_draw_arc(
-        draw_ctx,
-        &arc,
-        &center,
-        radius,
-        0,
-        360);
-    lv_draw_arc(
-        draw_ctx,
-        &arc,
-        &center,
-        radius * 2 / 3,
-        0,
-        360);
+    /* Outer ring: solid. */
+    lv_draw_arc(draw_ctx, &arc, &center, radius, 0, 360);
 
-    lv_draw_arc(
-        draw_ctx,
-        &arc,
-        &center,
-        radius / 3,
-        0,
-        360);
+    /* Inner rings: dashed. Each ring is drawn as 36 short segments
+       of 6° with 4° gaps (total 360° = 10° per dash group, 36 groups). */
+    const int DASH_COUNT = 36;
+    const int DASH_DEG   = 6;   /* on */
+    const int GAP_DEG    = 4;   /* off */
+    const int STEP_DEG   = DASH_DEG + GAP_DEG;  /* 10° per group */
+    const int inner_radii[3] = {
+        radius * 3 / 4,
+        radius * 2 / 4,
+        radius * 1 / 4,
+    };
+    for (int ri = 0; ri < 3; ri++) {
+        int r = inner_radii[ri];
+        for (int k = 0; k < DASH_COUNT; k++) {
+            int start = k * STEP_DEG;
+            int end   = start + DASH_DEG;
+            lv_draw_arc(draw_ctx, &arc, &center, r, start, end);
+        }
+    }
 
     /* range-ring distance labels + N/E/S/W compass + centre cross */
     draw_compass_and_scale(draw_ctx, cx, cy, radius);
@@ -806,8 +979,12 @@ int Radar_PickAircraft(
             height) /
         2;
 
-    /* finger-tap tolerance (squared) */
-    const int tolPx = 22;
+    /* finger-tap tolerance (squared). The aircraft sprites are now
+       up to 96 px across for AC_LARGE, so the tap-tolerance needs to
+       be at least half the largest sprite diagonal (~68 px). 60 px
+       gives a comfortable hit area without making the radar feel
+       inaccurate. */
+    const int tolPx = 60;
     int bestDist = tolPx * tolPx;
     int best = -1;
 

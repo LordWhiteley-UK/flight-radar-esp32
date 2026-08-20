@@ -244,9 +244,23 @@ int x = (eastKm  / radarRadiusKm) * radiusPixels;
 int y = -(northKm / radarRadiusKm) * radiusPixels;   // y is inverted because LVGL y grows downward
 ```
 
-Heavy aircraft get a larger icon: the spread is 7 → 20 px (about 2.85×)
-across the OpenSky category codes. Size is fixed across the selected /
-unselected states — only the yellow ring distinguishes them.
+Aircraft icons are rendered in **three size classes** driven by the
+OpenSky `category` field (states-array index 17), matching the
+Flightradar24 convention — same plane silhouette in all three, just at
+different pixel sizes:
+
+| Class    | Pixel size | OpenSky categories |
+|----------|------------|--------------------|
+| SMALL    | 10 px      | 2 (Light), 8 (Rotorcraft), 9 (Glider), 10 (Lighter-than-air), 12 (Ultralight), 14 (UAV), 15 (Space) |
+| MEDIUM   | 16 px      | 3 (Small), 4 (Large), 7 (High Performance), 11 (Parachutist), 16–20 (surface vehicles / obstacles), and unknown/missing (0, 1, 13) |
+| LARGE    | 24 px      | 5 (High Vortex Large, e.g. B-757), 6 (Heavy > 300k lbs — wide-bodies like B777, A380, B747) |
+
+The largest icon (24 px) is ~2.4× the smallest (10 px). Unknown / missing
+category codes default to MEDIUM rather than SMALL so a payload without
+category data still renders at a readable size rather than collapsing to
+a tiny dot. Size is fixed across the selected / unselected states — only
+the yellow ring distinguishes the selected aircraft, so the icon does
+not appear to grow when tapped.
 
 ### 5.2 The trail
 

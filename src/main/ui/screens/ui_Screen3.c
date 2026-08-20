@@ -168,9 +168,8 @@ void ui_Screen3_screen_init(void)
     ui_RowLabels = make_row(ui_SettingsList, "Show labels", &ui_LabelLabelsRow);
     ui_SwitchLabelsRow = make_switch(ui_RowLabels, true);
 
-    /* Trail */
-    ui_RowTrail = make_row(ui_SettingsList, "Trail (selected)", &ui_LabelTrailRow);
-    ui_SwitchTrailRow = make_switch(ui_RowTrail, false);
+    /* Trail row removed — the user requested no GUI control for the
+       trail. The trail now lives entirely in code (always off). */
 
     /* Coordinates */
     ui_RowCoords = lv_obj_create(ui_SettingsList);
@@ -337,7 +336,7 @@ void ui_Screen3_screen_init(void)
     lv_obj_add_event_cb(ui_Button9, ui_event_Button9, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchUnitsRow, ui_event_SwitchUnits, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_SwitchLabelsRow, ui_event_Switch3, LV_EVENT_ALL, NULL);
-    lv_obj_add_event_cb(ui_SwitchTrailRow, ui_event_SwitchTrail, LV_EVENT_ALL, NULL);
+    /* Trail toggle event_cb removed — no GUI control for trail */
     lv_obj_add_event_cb(ui_ButtonEditCoords, ui_event_Button3, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_TextLat, ui_event_TextLat, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_TextLon, ui_event_TextLon, LV_EVENT_ALL, NULL);

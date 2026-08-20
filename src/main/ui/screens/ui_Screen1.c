@@ -342,15 +342,8 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_text_color(ui_RadarLoc, lv_color_hex(0xA8A8A8), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_RadarLoc, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    /* API-age readout — small bottom-right of the radar panel, kept out of
-       the way of the radar dial itself. */
-    ui_LabelAPIRefreshBig = lv_label_create(ui_PanelRadar);
-    lv_obj_set_align(ui_LabelAPIRefreshBig, LV_ALIGN_BOTTOM_RIGHT);
-    lv_obj_set_x(ui_LabelAPIRefreshBig, -8);
-    lv_obj_set_y(ui_LabelAPIRefreshBig, -8);
-    lv_label_set_text(ui_LabelAPIRefreshBig, "API: --");
-    lv_obj_set_style_text_color(ui_LabelAPIRefreshBig, lv_color_hex(0x7CFFB0), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_LabelAPIRefreshBig, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    /* API-age readout is created later, once ui_PanelRight exists
+       (see the Settings-row block below). */
 
     /* Waiting banner — shown on startup, hidden after the first successful
        OpenSky fetch. Centred on the radar panel. */
@@ -418,14 +411,47 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_align(ui_PanelRight, LV_ALIGN_TOP_RIGHT);
     lv_obj_set_flex_flow(ui_PanelRight, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(ui_PanelRight, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_clear_flag(ui_PanelRight, LV_OBJ_FLAG_SCROLLABLE);
+    /* Right rail is taller than its 480 px container once all cards +
+       range/refresh/wifi/ip/trail/settings rows are stacked (≈ 556 px
+       total). Enable vertical scrolling so the Settings button at the
+       bottom stays reachable — without this the button is drawn off the
+       bottom edge of the screen and is invisible / untappable. */
+    lv_obj_add_flag(ui_PanelRight, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_pad_left(ui_PanelRight, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(ui_PanelRight, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_top(ui_PanelRight, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_bottom(ui_PanelRight, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_row(ui_PanelRight, 4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_pad_row(ui_PanelRight, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     /* aircraft count + "aircraft nearby" — top of rail */
+    ui_ContainerSettings = lv_obj_create(ui_PanelRight);
+    lv_obj_remove_style_all(ui_ContainerSettings);
+    lv_obj_set_width(ui_ContainerSettings, lv_pct(100));
+    lv_obj_set_height(ui_ContainerSettings, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(ui_ContainerSettings, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(ui_ContainerSettings, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(ui_ContainerSettings, 8, 0);
+    ui_Button1 = lv_btn_create(ui_ContainerSettings);
+    lv_obj_set_width(ui_Button1, 32); lv_obj_set_height(ui_Button1, 32);
+    lv_obj_add_flag(ui_Button1, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+    lv_obj_clear_flag(ui_Button1, LV_OBJ_FLAG_SCROLLABLE);
+    /* Override the default button theme so the gear is visible. The
+       theme's default colour_grey bg + 3-px shadow makes a tiny 32x32
+       icon disappear; clear the theme styles and give it a flat dark
+       bg matching the surrounding rail. The gear sprite itself is
+       baked-white (see comment above). */
+    lv_obj_set_style_bg_color(ui_Button1, lv_color_hex(0x1B2147), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Button1, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_shadow_width(ui_Button1, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    /* Settings gear icon. The sprite is baked as a pure-white silhouette
+       at build time — see ui_img_settings_png.c. Recolour is disabled
+       because LVGL's recolor formula is broken at LV_COLOR_DEPTH == 16. */
+    lv_obj_set_style_bg_img_src(ui_Button1, &ui_img_settings_png, 0);
+    lv_obj_set_style_bg_img_recolor_opa(ui_Button1, LV_OPA_TRANSP, 0);
+    ui_LabelSettings = lv_label_create(ui_ContainerSettings);
+    lv_label_set_text(ui_LabelSettings, "Settings");
+    lv_obj_set_style_text_color(ui_LabelSettings, lv_color_hex(0x7CFFB0), 0);
+    lv_obj_set_style_text_font(ui_LabelSettings, &lv_font_montserrat_14, 0);
     ui_Container4 = lv_obj_create(ui_PanelRight);
     CARD(ui_Container4);
     lv_obj_set_width(ui_Container4, lv_pct(100));
@@ -442,14 +468,14 @@ void ui_Screen1_screen_init(void)
     ui_ContainerCard4 = lv_obj_create(ui_PanelRight);
     CARD(ui_ContainerCard4);
     lv_obj_set_width(ui_ContainerCard4, lv_pct(100));
-    lv_obj_set_height(ui_ContainerCard4, 50);
+    lv_obj_set_height(ui_ContainerCard4, 48);
     ui_Label17 = lv_label_create(ui_ContainerCard4);
     lv_obj_set_x(ui_Label17, 10); lv_obj_set_y(ui_Label17, 2);
     lv_label_set_text(ui_Label17, "Callsign");
     lv_obj_set_style_text_font(ui_Label17, &lv_font_montserrat_12, 0); GRAY(ui_Label17);
     ui_LabelCraftName = lv_label_create(ui_ContainerCard4);
     lv_obj_set_align(ui_LabelCraftName, LV_ALIGN_BOTTOM_LEFT);
-    lv_obj_set_x(ui_LabelCraftName, 10); lv_obj_set_y(ui_LabelCraftName, -4);
+    lv_obj_set_x(ui_LabelCraftName, 10); lv_obj_set_y(ui_LabelCraftName, -2);
     lv_label_set_text(ui_LabelCraftName, "—");
     lv_obj_set_style_text_color(ui_LabelCraftName, lv_color_hex(0xF98A00), 0);
     lv_obj_set_style_text_font(ui_LabelCraftName, &lv_font_montserrat_20, 0);
@@ -458,14 +484,14 @@ void ui_Screen1_screen_init(void)
     ui_ContainerCard7 = lv_obj_create(ui_PanelRight);
     CARD(ui_ContainerCard7);
     lv_obj_set_width(ui_ContainerCard7, lv_pct(100));
-    lv_obj_set_height(ui_ContainerCard7, 40);
+    lv_obj_set_height(ui_ContainerCard7, 44);
     ui_Label20 = lv_label_create(ui_ContainerCard7);
     lv_obj_set_x(ui_Label20, 10); lv_obj_set_y(ui_Label20, 2);
     lv_label_set_text(ui_Label20, "Origin");
     lv_obj_set_style_text_font(ui_Label20, &lv_font_montserrat_12, 0); GRAY(ui_Label20);
     ui_LabelCraftOrigin = lv_label_create(ui_ContainerCard7);
     lv_obj_set_align(ui_LabelCraftOrigin, LV_ALIGN_BOTTOM_LEFT);
-    lv_obj_set_x(ui_LabelCraftOrigin, 10); lv_obj_set_y(ui_LabelCraftOrigin, -4);
+    lv_obj_set_x(ui_LabelCraftOrigin, 10); lv_obj_set_y(ui_LabelCraftOrigin, -2);
     lv_label_set_text(ui_LabelCraftOrigin, "—");
     lv_obj_set_style_text_color(ui_LabelCraftOrigin, lv_color_hex(0x00A4F9), 0);
     lv_obj_set_style_text_font(ui_LabelCraftOrigin, &lv_font_montserrat_16, 0);
@@ -474,14 +500,14 @@ void ui_Screen1_screen_init(void)
     ui_ContainerCard5 = lv_obj_create(ui_PanelRight);
     CARD(ui_ContainerCard5);
     lv_obj_set_width(ui_ContainerCard5, lv_pct(100));
-    lv_obj_set_height(ui_ContainerCard5, 44);
+    lv_obj_set_height(ui_ContainerCard5, 40);
     ui_Label18 = lv_label_create(ui_ContainerCard5);
     lv_obj_set_x(ui_Label18, 10); lv_obj_set_y(ui_Label18, 2);
     lv_label_set_text(ui_Label18, "Altitude");
     lv_obj_set_style_text_font(ui_Label18, &lv_font_montserrat_12, 0); GRAY(ui_Label18);
     ui_LabelCraftAlt = lv_label_create(ui_ContainerCard5);
     lv_obj_set_align(ui_LabelCraftAlt, LV_ALIGN_BOTTOM_LEFT);
-    lv_obj_set_x(ui_LabelCraftAlt, 10); lv_obj_set_y(ui_LabelCraftAlt, -4);
+    lv_obj_set_x(ui_LabelCraftAlt, 10); lv_obj_set_y(ui_LabelCraftAlt, -2);
     lv_label_set_text(ui_LabelCraftAlt, "—");
     lv_obj_set_style_text_color(ui_LabelCraftAlt, lv_color_hex(0x00F912), 0);
     lv_obj_set_style_text_font(ui_LabelCraftAlt, &lv_font_montserrat_16, 0);
@@ -490,14 +516,14 @@ void ui_Screen1_screen_init(void)
     ui_ContainerCard6 = lv_obj_create(ui_PanelRight);
     CARD(ui_ContainerCard6);
     lv_obj_set_width(ui_ContainerCard6, lv_pct(100));
-    lv_obj_set_height(ui_ContainerCard6, 44);
+    lv_obj_set_height(ui_ContainerCard6, 40);
     ui_Label19 = lv_label_create(ui_ContainerCard6);
     lv_obj_set_x(ui_Label19, 10); lv_obj_set_y(ui_Label19, 2);
     lv_label_set_text(ui_Label19, "Speed");
     lv_obj_set_style_text_font(ui_Label19, &lv_font_montserrat_12, 0); GRAY(ui_Label19);
     ui_LabelCraftSpeed = lv_label_create(ui_ContainerCard6);
     lv_obj_set_align(ui_LabelCraftSpeed, LV_ALIGN_BOTTOM_LEFT);
-    lv_obj_set_x(ui_LabelCraftSpeed, 10); lv_obj_set_y(ui_LabelCraftSpeed, -4);
+    lv_obj_set_x(ui_LabelCraftSpeed, 10); lv_obj_set_y(ui_LabelCraftSpeed, -2);
     lv_label_set_text(ui_LabelCraftSpeed, "—");
     lv_obj_set_style_text_color(ui_LabelCraftSpeed, lv_color_hex(0xDDF900), 0);
     lv_obj_set_style_text_font(ui_LabelCraftSpeed, &lv_font_montserrat_16, 0);
@@ -506,14 +532,14 @@ void ui_Screen1_screen_init(void)
     ui_ContainerCard10 = lv_obj_create(ui_PanelRight);
     CARD(ui_ContainerCard10);
     lv_obj_set_width(ui_ContainerCard10, lv_pct(100));
-    lv_obj_set_height(ui_ContainerCard10, 44);
+    lv_obj_set_height(ui_ContainerCard10, 40);
     ui_Label26 = lv_label_create(ui_ContainerCard10);
     lv_obj_set_x(ui_Label26, 10); lv_obj_set_y(ui_Label26, 2);
     lv_label_set_text(ui_Label26, "Heading");
     lv_obj_set_style_text_font(ui_Label26, &lv_font_montserrat_12, 0); GRAY(ui_Label26);
     ui_LabelCraftHeading = lv_label_create(ui_ContainerCard10);
     lv_obj_set_align(ui_LabelCraftHeading, LV_ALIGN_BOTTOM_LEFT);
-    lv_obj_set_x(ui_LabelCraftHeading, 10); lv_obj_set_y(ui_LabelCraftHeading, -4);
+    lv_obj_set_x(ui_LabelCraftHeading, 10); lv_obj_set_y(ui_LabelCraftHeading, -2);
     lv_label_set_text(ui_LabelCraftHeading, "—");
     lv_obj_set_style_text_color(ui_LabelCraftHeading, lv_color_hex(0x00A4F9), 0);
     lv_obj_set_style_text_font(ui_LabelCraftHeading, &lv_font_montserrat_16, 0);
@@ -522,14 +548,14 @@ void ui_Screen1_screen_init(void)
     ui_ContainerCardClimb = lv_obj_create(ui_PanelRight);
     CARD(ui_ContainerCardClimb);
     lv_obj_set_width(ui_ContainerCardClimb, lv_pct(100));
-    lv_obj_set_height(ui_ContainerCardClimb, 44);
+    lv_obj_set_height(ui_ContainerCardClimb, 40);
     ui_LabelClimbTitle = lv_label_create(ui_ContainerCardClimb);
     lv_obj_set_x(ui_LabelClimbTitle, 10); lv_obj_set_y(ui_LabelClimbTitle, 2);
     lv_label_set_text(ui_LabelClimbTitle, "Climb");
     lv_obj_set_style_text_font(ui_LabelClimbTitle, &lv_font_montserrat_12, 0); GRAY(ui_LabelClimbTitle);
     ui_LabelCraftClimb = lv_label_create(ui_ContainerCardClimb);
     lv_obj_set_align(ui_LabelCraftClimb, LV_ALIGN_BOTTOM_LEFT);
-    lv_obj_set_x(ui_LabelCraftClimb, 10); lv_obj_set_y(ui_LabelCraftClimb, -4);
+    lv_obj_set_x(ui_LabelCraftClimb, 10); lv_obj_set_y(ui_LabelCraftClimb, -2);
     lv_label_set_text(ui_LabelCraftClimb, "—");
     lv_obj_set_style_text_color(ui_LabelCraftClimb, lv_color_hex(0x00A4F9), 0);
     lv_obj_set_style_text_font(ui_LabelCraftClimb, &lv_font_montserrat_16, 0);
@@ -538,7 +564,7 @@ void ui_Screen1_screen_init(void)
     ui_ContainerRange = lv_obj_create(ui_PanelRight);
     lv_obj_remove_style_all(ui_ContainerRange);
     lv_obj_set_width(ui_ContainerRange, lv_pct(100));
-    lv_obj_set_height(ui_ContainerRange, 36);
+    lv_obj_set_height(ui_ContainerRange, 30);
     lv_obj_set_flex_flow(ui_ContainerRange, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ui_ContainerRange, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(ui_ContainerRange, 6, 0);
@@ -572,7 +598,7 @@ void ui_Screen1_screen_init(void)
     ui_ContainerRefresh = lv_obj_create(ui_PanelRight);
     lv_obj_remove_style_all(ui_ContainerRefresh);
     lv_obj_set_width(ui_ContainerRefresh, lv_pct(100));
-    lv_obj_set_height(ui_ContainerRefresh, 36);
+    lv_obj_set_height(ui_ContainerRefresh, 30);
     lv_obj_set_flex_flow(ui_ContainerRefresh, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ui_ContainerRefresh, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(ui_ContainerRefresh, 6, 0);
@@ -633,41 +659,16 @@ void ui_Screen1_screen_init(void)
     /* API age — moved to bottom-right of the radar panel (ui_LabelAPIRefreshBig).
        No duplicate here. */
 
-    /* Trail toggle row — switch on the right */
-    ui_ContainerTrailRowMain = lv_obj_create(ui_PanelRight);
-    lv_obj_remove_style_all(ui_ContainerTrailRowMain);
-    lv_obj_set_width(ui_ContainerTrailRowMain, lv_pct(100));
-    lv_obj_set_height(ui_ContainerTrailRowMain, 36);
-    lv_obj_set_flex_flow(ui_ContainerTrailRowMain, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(ui_ContainerTrailRowMain, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    ui_LabelTrailTextMain = lv_label_create(ui_ContainerTrailRowMain);
-    lv_label_set_text(ui_LabelTrailTextMain, "Trail (selected)");
-    lv_obj_set_style_text_color(ui_LabelTrailTextMain, lv_color_hex(0x7CFFB0), 0);
-    lv_obj_set_style_text_font(ui_LabelTrailTextMain, &lv_font_montserrat_16, 0);
-    ui_SwitchTrailRowMain = lv_switch_create(ui_ContainerTrailRowMain);
-    lv_obj_set_width(ui_SwitchTrailRowMain, 60);
-    lv_obj_set_height(ui_SwitchTrailRowMain, 30);
-    /* default OFF — LoadTrail() in app_state.c will sync the switch state */
+    /* Trail toggle row removed from the right rail — the user
+       requested no GUI control for the trail (it now lives entirely
+       in code defaults and is forced OFF on boot). Keeping the
+       variables declared but the row hidden so other files still
+       compile. */
 
-    /* Settings row — gear + "Settings" label, just below the status rows */
-    ui_ContainerSettings = lv_obj_create(ui_PanelRight);
-    lv_obj_remove_style_all(ui_ContainerSettings);
-    lv_obj_set_width(ui_ContainerSettings, lv_pct(100));
-    lv_obj_set_height(ui_ContainerSettings, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(ui_ContainerSettings, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(ui_ContainerSettings, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(ui_ContainerSettings, 8, 0);
-    ui_Button1 = lv_btn_create(ui_ContainerSettings);
-    lv_obj_set_width(ui_Button1, 32); lv_obj_set_height(ui_Button1, 32);
-    lv_obj_add_flag(ui_Button1, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
-    lv_obj_clear_flag(ui_Button1, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_img_src(ui_Button1, &ui_img_settings_png, 0);
-    lv_obj_set_style_bg_img_recolor(ui_Button1, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_bg_img_recolor_opa(ui_Button1, 255, 0);
-    ui_LabelSettings = lv_label_create(ui_ContainerSettings);
-    lv_label_set_text(ui_LabelSettings, "Settings");
-    lv_obj_set_style_text_color(ui_LabelSettings, lv_color_hex(0x7CFFB0), 0);
-    lv_obj_set_style_text_font(ui_LabelSettings, &lv_font_montserrat_14, 0);
+    /* Settings row + API label moved to the TOP of the right rail so the
+       gear button is always visible without scrolling. The right rail is
+       only 480 px tall and stacks ~14 rows of cards/controls, so anything
+       at the bottom is unreachable on first look. */
 
     /* category card kept but hidden (OpenSky usually "Unknown") */
     ui_ContainerCard9 = lv_obj_create(ui_PanelRight);
@@ -685,6 +686,16 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_text_color(ui_LabelCraftCategory, lv_color_hex(0x00A4F9), 0);
     lv_obj_set_style_text_font(ui_LabelCraftCategory, &lv_font_montserrat_16, 0);
     lv_obj_add_flag(ui_ContainerCard9, LV_OBJ_FLAG_HIDDEN);
+
+    /* API-age readout at the bottom of the rail. Reachable by scrolling.
+       Lives here (not in the radar panel) so it doesn't crowd the bottom
+       edge of the radar dial and overlap the "S" compass label. */
+    ui_LabelAPIRefreshBig = lv_label_create(ui_PanelRight);
+    lv_obj_set_width(ui_LabelAPIRefreshBig, lv_pct(100));
+    lv_label_set_text(ui_LabelAPIRefreshBig, "API: --");
+    lv_obj_set_style_text_color(ui_LabelAPIRefreshBig, lv_color_hex(0x7CFFB0), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_LabelAPIRefreshBig, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_align(ui_LabelAPIRefreshBig, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     /* ============ No more bottom status bar ============ */
     ui_PanelBottom = NULL;  /* kept for uic_ alias compatibility */
@@ -723,7 +734,8 @@ void ui_Screen1_screen_init(void)
     lv_obj_add_event_cb(ui_ButtonRefreshDown, ui_event_ButtonRefreshDown, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_Button1,           ui_event_Button1,           LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_Imageradar,        Radar_TapSelect,            LV_EVENT_CLICKED, NULL);
-    lv_obj_add_event_cb(ui_SwitchTrailRowMain,    toggleTrail,                LV_EVENT_ALL, NULL);
+    /* Trail toggle removed from the GUI — no widget to bind to. */
+    /* lv_obj_add_event_cb(ui_SwitchTrailRowMain, toggleTrail, LV_EVENT_ALL, NULL); */
 
     /* ---- uic_ aliases owned by Screen1 ---- */
     uic_PanelRadar   = ui_PanelRadar;
