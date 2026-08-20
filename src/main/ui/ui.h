@@ -45,9 +45,6 @@ LV_IMG_DECLARE(ui_img_flight_png);    // assets/Flight.png
 LV_IMG_DECLARE(ui_img_refresh_24_png);    // assets/refresh_24.png
 LV_IMG_DECLARE(ui_img_edit_24_png);    // assets/edit_24.png
 LV_IMG_DECLARE(ui_img_settings_png);    // assets/settings.png
-LV_IMG_DECLARE(ui_img_aircraft_small_png);    // assets/plane icons.png (SMALL class)
-LV_IMG_DECLARE(ui_img_aircraft_medium_png);   // assets/plane icons.png (MEDIUM class)
-LV_IMG_DECLARE(ui_img_aircraft_large_png);    // assets/plane icons.png (LARGE class)
 
 // UI INIT
 void ui_init(void);
