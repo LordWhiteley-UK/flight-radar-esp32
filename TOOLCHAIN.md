@@ -1,4 +1,4 @@
-# Toolchain: building and flashing the flight radar
+# Toolchain: building and flashing the flight tracker
 
 This document covers everything you need to compile the firmware and put it on
 the Elecrow 7" ESP32-S3 HMI display. It is written for both macOS and Windows

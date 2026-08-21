@@ -1,4 +1,4 @@
-# DEVELOPER.md — Flight Radar ESP32-S3
+# DEVELOPER.md — Flight Tracker ESP32-S3
 
 > **You are a future Claude session that has just been fired up to make
 > amendments to this firmware. Read this file first. It is the single source
@@ -39,7 +39,7 @@ that you might not see in older docs are:
 
 1. **Aircraft glyph restored to the original three-line shape** (fuselage +
    wings + tail bar) drawn as plain `lv_draw_line` segments, with **three
-   visual size classes** — see §6.4.
+   visual size classes** (8 / 12 / 18 px, each +50% of the previous) — see §6.4.
 2. **Helicopter symbol** is a circle with an "H" inside it, bigger than the
    original (radius 13, font 16) — see §6.5.
 3. **Range rings**: **4 rings** at 25% / 50% / 75% / 100% of the radar
@@ -362,15 +362,15 @@ tail bar). The user explicitly reverted to this shape after several
 attempts at filled sprites / chevrons / triangles.
 
 ```c
-/* Class → glyph size. Baseline = light, medium = +25%, large = +50%.
- * Selected aircraft get an extra ~4 px bump so the selection ring has
+/* Class → glyph size. Each step is +50% of the previous (8 → 12 → 18).
+ * Selected aircraft get an extra +4 px bump so the selection ring has
  * a clear gap. */
 int size;
 switch (cls) {
-case AC_SMALL:  size = selected ? 12 : 8;  break;
-case AC_MEDIUM: size = selected ? 16 : 10; break;
-case AC_LARGE:  size = selected ? 20 : 12; break;
-default:        size = selected ? 16 : 10; break;
+case AC_SMALL:  size = selected ? 12 : 8;  break;   /* light  — baseline */
+case AC_MEDIUM: size = selected ? 16 : 12; break;   /* narrow — +50% */
+case AC_LARGE:  size = selected ? 22 : 18; break;   /* wide   — +50% */
+default:        size = selected ? 16 : 12; break;
 }
 
 float h  = (float)a->heading * 0.0174532925f;

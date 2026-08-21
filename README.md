@@ -1,6 +1,6 @@
-# Flight Radar
+# Flight Tracker
 
-A live aircraft radar for the **Elecrow 7" ESP32-S3 HMI display**. Pulls
+A live aircraft tracker for the **Elecrow 7" ESP32-S3 HMI display**. Pulls
 real-time ADS-B data from the [OpenSky Network](https://opensky-network.org/),
 plots aircraft on a green radar dial with a sweeping arm, and lets you tap
 to select any aircraft in range and see its callsign, altitude, speed,

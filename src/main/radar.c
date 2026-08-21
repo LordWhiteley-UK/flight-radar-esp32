@@ -502,19 +502,20 @@ static void DrawAircraft(
              - wings (perpendicular through the centre)
              - tail bar (perpendicular at the tail end)
 
-           Three size classes — the user requested visual size by
-           aircraft category. Small / light = baseline, medium
-           (B737 / A320 narrow-body) = +25%, large (wide-body) = +50%.
+           Three size classes. Each step is +50% of the previous:
+             - small  (light / UAV)            = baseline 8 px
+             - medium (B737 / A320 narrow)     = +50% = 12 px
+             - large  (wide-body / heavy)      = +50% = 18 px
            Selected aircraft get an extra +4 bump so the ring has
            a clear gap. */
 
         int size;
         switch (cls)
         {
-        case AC_SMALL:  size = selected ? 12 : 8;  break;   /* light */
-        case AC_MEDIUM: size = selected ? 16 : 10; break;   /* +25% */
-        case AC_LARGE:  size = selected ? 20 : 12; break;   /* +50% */
-        default:        size = selected ? 16 : 10; break;
+        case AC_SMALL:  size = selected ? 12 : 8;  break;   /* light  — baseline */
+        case AC_MEDIUM: size = selected ? 16 : 12; break;   /* narrow — +50% */
+        case AC_LARGE:  size = selected ? 22 : 18; break;   /* wide-body — +50% more */
+        default:        size = selected ? 16 : 12; break;
         }
 
         float h = (float)a->heading * 0.0174532925f;
@@ -552,9 +553,9 @@ static void DrawAircraft(
         switch (cls)
         {
         case AC_HELI:   ringRadius = 20; break;
-        case AC_SMALL:  ringRadius = 16; break;
-        case AC_MEDIUM: ringRadius = 20; break;
-        case AC_LARGE:  ringRadius = 26; break;
+        case AC_SMALL:  ringRadius = 16; break;   /* clears size=8 → 12 */
+        case AC_MEDIUM: ringRadius = 20; break;   /* clears size=12 → 16 */
+        case AC_LARGE:  ringRadius = 26; break;   /* clears size=18 → 22 */
         default:        ringRadius = 20; break;
         }
 

@@ -132,7 +132,7 @@ void ui_Screen3_screen_init(void)
     ui_SettingsTitle = lv_label_create(ui_Screen3);
     lv_obj_set_x(ui_SettingsTitle, 16);
     lv_obj_set_y(ui_SettingsTitle, 10);
-    lv_label_set_text(ui_SettingsTitle, "Flight Radar · Settings");
+    lv_label_set_text(ui_SettingsTitle, "Flight Tracker · Settings");
     lv_obj_set_style_text_color(ui_SettingsTitle, lv_color_hex(0x08FF00), 0);
     lv_obj_set_style_text_font(ui_SettingsTitle, &lv_font_montserrat_20, 0);
 

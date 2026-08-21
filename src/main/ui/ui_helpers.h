@@ -3,8 +3,8 @@
 // LVGL version: 8.3.11
 // Project name: Flight_radar
 
-#ifndef _FLIGHT_RADAR_UI_HELPERS_H
-#define _FLIGHT_RADAR_UI_HELPERS_H
+#ifndef _FLIGHT_TRACKER_UI_HELPERS_H
+#define _FLIGHT_TRACKER_UI_HELPERS_H
 
 #ifdef __cplusplus
 extern "C" {

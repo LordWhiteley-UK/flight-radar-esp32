@@ -68,7 +68,7 @@ void sdl_display_init(void)
         exit(1);
     }
 
-    window = SDL_CreateWindow("Flight Radar 7 (simulator)",
+    window = SDL_CreateWindow("Flight Tracker 7 (simulator)",
                               SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               DISP_W, DISP_H, 0);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);

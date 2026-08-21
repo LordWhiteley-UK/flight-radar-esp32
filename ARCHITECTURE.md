@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the design of the flight-radar firmware that runs on
+This document describes the design of the flight-tracker firmware that runs on
 the Elecrow 7" ESP32-S3 HMI display. It is meant to be read by a developer
 (including a different AI) who has not seen the code before and needs to
 understand how the pieces fit together before changing anything.
@@ -251,16 +251,17 @@ different pixel sizes:
 
 | Class    | Pixel size | OpenSky categories |
 |----------|------------|--------------------|
-| SMALL    | 10 px      | 2 (Light), 8 (Rotorcraft), 9 (Glider), 10 (Lighter-than-air), 12 (Ultralight), 14 (UAV), 15 (Space) |
-| MEDIUM   | 16 px      | 3 (Small), 4 (Large), 7 (High Performance), 11 (Parachutist), 16–20 (surface vehicles / obstacles), and unknown/missing (0, 1, 13) |
-| LARGE    | 24 px      | 5 (High Vortex Large, e.g. B-757), 6 (Heavy > 300k lbs — wide-bodies like B777, A380, B747) |
+| SMALL    | 8 px       | 2 (Light), 8 (Rotorcraft), 9 (Glider), 10 (Lighter-than-air), 12 (Ultralight), 14 (UAV), 15 (Space) |
+| MEDIUM   | 12 px      | 3 (Small), 4 (Large), 7 (High Performance), 11 (Parachutist), 16–20 (surface vehicles / obstacles), and unknown/missing (0, 1, 13) |
+| LARGE    | 18 px      | 5 (High Vortex Large, e.g. B-757), 6 (Heavy > 300k lbs — wide-bodies like B777, A380, B747) |
 
-The largest icon (24 px) is ~2.4× the smallest (10 px). Unknown / missing
-category codes default to MEDIUM rather than SMALL so a payload without
-category data still renders at a readable size rather than collapsing to
-a tiny dot. Size is fixed across the selected / unselected states — only
-the yellow ring distinguishes the selected aircraft, so the icon does
-not appear to grow when tapped.
+Each step is **+50%** of the previous size (8 → 12 → 18). The largest icon
+(18 px) is ~2.25× the smallest (8 px). Unknown / missing category codes
+default to MEDIUM rather than SMALL so a payload without category data
+still renders at a readable size rather than collapsing to a tiny dot.
+Size is fixed across the selected / unselected states — only the yellow
+ring distinguishes the selected aircraft, so the icon does not appear to
+grow when tapped.
 
 ### 5.2 The trail
 

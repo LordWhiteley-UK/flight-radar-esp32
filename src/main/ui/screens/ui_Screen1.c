@@ -317,7 +317,7 @@ void ui_Screen1_screen_init(void)
     ui_RadarTitle = lv_label_create(ui_PanelRadar);
     lv_obj_set_x(ui_RadarTitle, 2);
     lv_obj_set_y(ui_RadarTitle, 12);
-    lv_label_set_text(ui_RadarTitle, "Flight Radar");
+    lv_label_set_text(ui_RadarTitle, "Flight Tracker");
     lv_obj_set_style_text_color(ui_RadarTitle, lv_color_hex(0x7CFFB0), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_RadarTitle, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 

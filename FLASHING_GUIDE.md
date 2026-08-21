@@ -1,6 +1,6 @@
 # Beginner's Guide: Erase & Program the ELECROW ESP32 7" Display (800×480)
 
-This guide walks you through setting up the toolchain, erasing the board, and flashing the **Flight-radar-7** firmware onto an **ELECROW ESP32 7" HMI Advanced IPS Touch Display (800×480)**.
+This guide walks you through setting up the toolchain, erasing the board, and flashing the **Flight-Tracker-7** firmware onto an **ELECROW ESP32 7" HMI Advanced IPS Touch Display (800×480)**.
 
 The board is an **ESP32-S3** module with:
 - 16 MB QIO flash

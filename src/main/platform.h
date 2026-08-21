@@ -1,7 +1,7 @@
 /*
- * platform.h — platform abstraction layer (HAL) for Flight-radar-7.
+ * platform.h — platform abstraction layer (HAL) for Flight-Tracker-7.
  *
- * The flight-radar core (radar, opensky_client, app_state, ui) calls only this
+ * The flight-tracker core (radar, opensky_client, app_state, ui) calls only this
  * API for anything hardware/OS-specific. Each target links its own
  * implementation:
  *   - ESP32-S3: platform_esp32.c  (NVS, esp_http_client, esp_wifi, esp_timer)

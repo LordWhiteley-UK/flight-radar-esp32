@@ -189,7 +189,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_width(ui_Label8, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_Label8, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_align(ui_Label8, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_Label8, "Flight Radar");
+    lv_label_set_text(ui_Label8, "Flight Tracker");
     lv_obj_set_style_text_font(ui_Label8, &lv_font_montserrat_48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(ui_ButtonConnect, ui_event_ButtonConnect, LV_EVENT_ALL, NULL);
