@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flight Tracker — Icon Preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    /* LVGL palette approximations — used to match the firmware */
+    --lv-green:  #3CC73C;     /* LV_PALETTE_GREEN — climbing / level */
+    --lv-red:    #E84A4A;     /* LV_PALETTE_RED   — descending */
+    --lv-grey:   #9A9A9A;     /* LV_PALETTE_GREY  — on ground */
+    --lv-yellow: #F2C94C;     /* LV_PALETTE_YELLOW — selection ring */
+    --lv-bg:     #0B1A0B;     /* radar green-phosphor background */
+    --lv-radar:  #143614;     /* radar dial face */
+    --lv-text:   #C9E8C9;
+    --lv-faint:  #6E8C6E;
+    --lv-grid:   #2A4A2A;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --lv-bg:     #F2F6F2;
+      --lv-radar:  #FFFFFF;
+      --lv-text:   #1A2A1A;
+      --lv-faint:  #5A6E5A;
+      --lv-grid:   #C8D6C8;
+    }
+  }
+
+  html, body {
+    background: var(--lv-bg);
+    color: var(--lv-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--lv-grid);
+  }
+  header h1 {
+    margin: 0 0 4px 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  header p {
+    margin: 0;
+    color: var(--lv-faint);
+    font-size: 13px;
+  }
+  main {
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  section {
+    margin-bottom: 32px;
+  }
+  section h2 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--lv-faint);
+  }
+  section p {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    color: var(--lv-faint);
+  }
+
+  /* ===== Side-by-side comparison grid ===== */
+  .compare {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 720px) {
+    .compare { grid-template-columns: repeat(2, 1fr); }
+  }
+  .cell {
+    background: var(--lv-radar);
+    border: 1px solid var(--lv-grid);
+    border-radius: 8px;
+    padding: 16px 12px 12px;
+    text-align: center;
+  }
+  .cell .label {
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--lv-text);
+  }
+  .cell .size {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--lv-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .cell .canvas {
+    /* Show a faint crosshair so the centre of the icon is obvious */
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto;
+  }
+  .cell .canvas::before,
+  .cell .canvas::after {
+    content: "";
+    position: absolute;
+    background: var(--lv-grid);
+  }
+  .cell .canvas::before { left: 50%; top: 0;   bottom: 0; width: 1px; transform: translateX(-0.5px); }
+  .cell .canvas::after  { top: 50%;  left: 0;  right: 0; height: 1px; transform: translateY(-0.5px); }
+  .cell .canvas svg {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+  }
+
+  /* ===== Radar sample at real panel scale ===== */
+  .radar-stage {
+    background: var(--lv-radar);
+    border: 1px solid var(--lv-grid);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .radar-stage .legend {
+    font-size: 12px;
+    color: var(--lv-faint);
+    line-height: 1.6;
+    flex: 1;
+    min-width: 180px;
+  }
+  .radar-stage .legend strong { color: var(--lv-text); }
+  .radar-stage .scale {
+    font-size: 11px;
+    color: var(--lv-faint);
+    margin-top: 8px;
+  }
+
+  /* ===== Heading grid ===== */
+  .headings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .heading-cell {
+    background: var(--lv-radar);
+    border: 1px solid var(--lv-grid);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+  .heading-cell svg {
+    width: 64px; height: 64px;
+    display: block;
+    margin: 0 auto;
+  }
+  .heading-cell .deg {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--lv-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Tiny "selected" toggle for the comparison */
+  .toggle {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: 12px;
+    align-items: center;
+  }
+  .toggle button {
+    background: var(--lv-radar);
+    color: var(--lv-text);
+    border: 1px solid var(--lv-grid);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .toggle button.active {
+    background: var(--lv-yellow);
+    color: #1A1A1A;
+    border-color: var(--lv-yellow);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Flight Tracker — Icon Size Preview</h1>
+  <p>Pixel-exact reproduction of the SVG/LVGL drawing in <code>src/main/radar.c::DrawAircraft</code>.
+     Use this page to compare the relative sizes of the three aircraft classes and the helicopter.</p>
+  <p>
+    <span class="toggle">
+      Mode:
+      <button id="btn-unsel" class="active">Unselected</button>
+      <button id="btn-sel">Selected (+4 px)</button>
+    </span>
+  </p>
+</header>
+
+<main>
+
+  <!-- =========================================================== -->
+  <!-- 1. Side-by-side comparison at 1:1 with the on-screen size     -->
+  <!-- =========================================================== -->
+  <section>
+    <h2>1. Side-by-side comparison</h2>
+    <p>Each cell draws the icon at exactly the pixels the firmware draws it. The faint crosshair is the icon centre.</p>
+
+    <div class="compare" id="compare-grid">
+      <!-- Small (light) -->
+      <div class="cell" data-cls="SMALL">
+        <div class="canvas"></div>
+        <div class="label">Small · light / UAV</div>
+        <div class="size">size <span class="px">8</span> px</div>
+      </div>
+      <!-- Medium (narrow-body) -->
+      <div class="cell" data-cls="MEDIUM">
+        <div class="canvas"></div>
+        <div class="label">Medium · narrow-body</div>
+        <div class="size">size <span class="px">12</span> px</div>
+      </div>
+      <!-- Large (wide-body) -->
+      <div class="cell" data-cls="LARGE">
+        <div class="canvas"></div>
+        <div class="label">Large · wide-body</div>
+        <div class="size">size <span class="px">18</span> px</div>
+      </div>
+      <!-- Helicopter -->
+      <div class="cell" data-cls="HELI">
+        <div class="canvas"></div>
+        <div class="label">Helicopter · H-in-circle</div>
+        <div class="size">radius <span class="px">13</span> px</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- 2. A representative slice of the radar dial                   -->
+  <!-- =========================================================== -->
+  <section>
+    <h2>2. In context — 100 km radar dial slice</h2>
+    <p>All four icons drawn at their real sizes on a fake 460×460 radar canvas (scaled to fit the page). The 100 km ring is dashed.</p>
+    <div class="radar-stage">
+      <div id="radar-canvas"></div>
+      <div class="legend">
+        <strong>What you're seeing</strong><br>
+        Top-down aircraft at the radar centre. The aircraft glyph is centred on the green dot.<br>
+        <strong>Green</strong> = climbing / level flight.<br>
+        <strong>Red</strong> = descending.<br>
+        <strong>Grey</strong> = on ground.<br>
+        <strong>Yellow ring</strong> = selected.
+        <div class="scale">Rendered at 0.6× the panel pixel size so the icons stay readable.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- 3. Heading rotation — same aircraft at 0°, 45°, 90°, ...     -->
+  <!-- =========================================================== -->
+  <section>
+    <h2>3. Heading rotation — medium aircraft at 0°–315°</h2>
+    <p>Confirms the icon rotates around its centre (not its top-left). 0° = north (up), clockwise positive, matches OpenSky <code>true_track</code>.</p>
+    <div class="headings" id="heading-grid"></div>
+  </section>
+
+</main>
+
+<script>
+/* =============================================================
+   Geometry — copied verbatim from src/main/radar.c::DrawAircraft.
+   ============================================================= */
+const AIRCRAFT_SIZES = { SMALL: 8, MEDIUM: 12, LARGE: 18 };
+const SELECTED_BUMP = 4;
+const HELI_RADIUS  = 13;   /* matches heliR in radar.c */
+const HELI_FONT_PX = 16;   /* matches lv_font_montserrat_16 */
+
+/* Colour codes — LVGL palette approximations. */
+const COLORS = {
+  green:  getCSS('--lv-green'),
+  red:    getCSS('--lv-red'),
+  grey:   getCSS('--lv-grey'),
+  yellow: getCSS('--lv-yellow'),
+};
+
+function getCSS(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/* =============================================================
+   SVG drawing primitives
+   ============================================================= */
+
+/* Compute the 6 endpoint pixel coordinates that DrawAircraft in
+   radar.c would produce, given a centre (cx, cy), heading in degrees
+   (0 = north, clockwise positive), and the `size` parameter.
+
+   The math is the PX/PY macros in radar.c, lifted into JS:
+     screen-x = (R * cos h) + (F * sin h)
+     screen-y = -(F * cos h - R * sin h) = (R * sin h) - (F * cos h)
+   where R is along the heading direction and F is perpendicular
+   (forward in the heading frame).
+
+   The three lines are:
+     fuselage   — nose (R=0,  F=+0.8)   to   tail (R=0,  F=-0.8)
+     wings      — lwing (-0.7, 0)      to   rwing (+0.7, 0)
+     tail bar   — tleft (-0.30, -0.8)  to   tright (+0.30, -0.8)
+*/
+function aircraftPts(cx, cy, headingDeg, size) {
+  const rad = headingDeg * Math.PI / 180;
+  const ch  = Math.cos(rad);
+  const sh  = Math.sin(rad);
+  const sf  = size;
+  const PX = (R, F) => cx + (R * ch + F * sh);
+  const PY = (R, F) => cy - (F * ch - R * sh);
+  return {
+    nose:   [PX(0,         sf * 0.8),  PY(0,         sf * 0.8) ],
+    tail:   [PX(0,        -sf * 0.8),  PY(0,        -sf * 0.8) ],
+    lwing:  [PX(-sf*0.7,   0),         PY(-sf*0.7,   0)        ],
+    rwing:  [PX( sf*0.7,   0),         PY( sf*0.7,   0)        ],
+    tleft:  [PX(-sf*0.30, -sf * 0.8),  PY(-sf*0.30, -sf * 0.8) ],
+    tright: [PX( sf*0.30, -sf * 0.8),  PY( sf*0.30, -sf * 0.8) ],
+  };
+}
+
+/* SVG element helpers — all geometry lives in the user-coordinate
+   space; the parent <svg> sets the on-screen pixel size. */
+function svg(tag, attrs, ...children) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    el.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c) el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return el;
+}
+
+function svgAircraft(cx, cy, headingDeg, size, color, selected) {
+  const p = aircraftPts(cx, cy, headingDeg, size);
+  const ringRadius = size === 8 ? 16 : size === 12 ? 20 : 26;
+  const g = svg('g');
+  if (selected) {
+    g.appendChild(svg('circle', {
+      cx, cy, r: ringRadius,
+      fill: 'none', stroke: COLORS.yellow, 'stroke-width': 2,
+    }));
+  }
+  const line = (x1, y1, x2, y2) => svg('line', {
+    x1, y1, x2, y2, stroke: color, 'stroke-width': 2,
+    'stroke-linecap': 'round',
+  });
+  g.appendChild(line(...p.nose,   ...p.tail));
+  g.appendChild(line(...p.lwing,  ...p.rwing));
+  g.appendChild(line(...p.tleft,  ...p.tright));
+  return g;
+}
+
+function svgHeli(cx, cy, color, selected) {
+  const ringRadius = 20;
+  const g = svg('g');
+  if (selected) {
+    g.appendChild(svg('circle', {
+      cx, cy, r: ringRadius,
+      fill: 'none', stroke: COLORS.yellow, 'stroke-width': 2,
+    }));
+  }
+  g.appendChild(svg('circle', {
+    cx, cy, r: HELI_RADIUS,
+    fill: 'none', stroke: color, 'stroke-width': 2,
+  }));
+  /* The "H" label — equivalent to lv_font_montserrat_16 in LVGL.
+     Browsers render system fonts at ~12 px; Helvetica/Arial is the
+     closest match in weight and metrics to Montserrat. We render at
+     16 px to match the LVGL font size. */
+  const t = svg('text', {
+    x: cx, y: cy,
+    'font-size': HELI_FONT_PX,
+    'font-family': 'Helvetica, Arial, sans-serif',
+    'font-weight': '700',
+    'text-anchor': 'middle',
+    'dominant-baseline': 'central',
+    fill: color,
+  }, 'H');
+  g.appendChild(t);
+  return g;
+}
+
+/* =============================================================
+   Section 1 — comparison grid
+   ============================================================= */
+function renderCompareGrid(selected) {
+  const grid = document.getElementById('compare-grid');
+  for (const cell of grid.querySelectorAll('.cell')) {
+    const cls = cell.dataset.cls;
+    const canvas = cell.querySelector('.canvas');
+    canvas.innerHTML = '';
+
+    /* Each canvas is 80x80 px. We use viewBox 0..80 for everything so
+       the icon is drawn at exactly its pixel size, centred on (40,40).
+       The visible canvas shows the icon plus the faint crosshair. */
+    const svgEl = svg('svg', {
+      viewBox: '0 0 80 80', width: 80, height: 80,
+    });
+    let icon;
+    if (cls === 'HELI') {
+      icon = svgHeli(40, 40, COLORS.green, selected);
+    } else {
+      const size = AIRCRAFT_SIZES[cls] + (selected ? SELECTED_BUMP : 0);
+      /* Headings: small=90°, medium=180°, large=270°, heli=0° — just
+         to make the row interesting and to confirm the icon points
+         correctly for each size class. */
+      const heading = ({ SMALL: 0, MEDIUM: 90, LARGE: 270 })[cls];
+      icon = svgAircraft(40, 40, heading, size, COLORS.green, selected);
+    }
+    svgEl.appendChild(icon);
+    canvas.appendChild(svgEl);
+
+    /* Update the size label to show selected-state size too */
+    const pxEl = cell.querySelector('.px');
+    if (cls === 'HELI') {
+      pxEl.textContent = String(HELI_RADIUS);
+    } else {
+      pxEl.textContent = String(AIRCRAFT_SIZES[cls] + (selected ? SELECTED_BUMP : 0));
+    }
+  }
+}
+
+/* =============================================================
+   Section 2 — radar stage
+   ============================================================= */
+function renderRadarStage(selected) {
+  const host = document.getElementById('radar-canvas');
+  host.innerHTML = '';
+  /* 460×460 is the real panel pixel size. Scale to 0.6× so the four
+     icons fit comfortably alongside the legend. */
+  const SCALE = 0.6;
+  const PANEL = 460;
+  const side = PANEL * SCALE;
+  const svgEl = svg('svg', {
+    viewBox: `0 0 ${PANEL} ${PANEL}`,
+    width: side, height: side,
+    style: 'background: var(--lv-radar); border-radius: 4px;',
+  });
+
+  /* Faint dial — four range rings (one solid at the rim, three
+     inner dashed) and a centre crosshair. Mirrors radar_draw_cb. */
+  const cx = PANEL / 2, cy = PANEL / 2;
+  const radius = PANEL / 2 - 20;
+  // Outer solid ring
+  svgEl.appendChild(svg('circle', {
+    cx, cy, r: radius, fill: 'none',
+    stroke: 'var(--lv-text)', 'stroke-width': 2,
+  }));
+  // Three inner dashed rings via 36 short arc segments — same recipe as radar.c
+  for (const frac of [0.25, 0.50, 0.75]) {
+    const r = radius * frac;
+    const dashDeg = 6, gapDeg = 4, stepDeg = dashDeg + gapDeg;
+    for (let k = 0; k < 36; k++) {
+      const start = k * stepDeg;
+      const end   = start + dashDeg;
+      const x1 = cx + r * Math.sin(start * Math.PI / 180);
+      const y1 = cy - r * Math.cos(start * Math.PI / 180);
+      const x2 = cx + r * Math.sin(end   * Math.PI / 180);
+      const y2 = cy - r * Math.cos(end   * Math.PI / 180);
+      svgEl.appendChild(svg('line', {
+        x1, y1, x2, y2,
+        stroke: 'var(--lv-faint)', 'stroke-width': 1,
+      }));
+    }
+  }
+  // Centre crosshair
+  svgEl.appendChild(svg('line', { x1: cx-6, y1: cy, x2: cx+6, y2: cy, stroke: 'var(--lv-faint)', 'stroke-width': 1 }));
+  svgEl.appendChild(svg('line', { x1: cx, y1: cy-6, x2: cx, y2: cy+6, stroke: 'var(--lv-faint)', 'stroke-width': 1 }));
+
+  /* Four aircraft icons placed around the centre. */
+  const placements = [
+    { dx:    0, dy:    0, cls: 'MEDIUM', heading:   0, color: COLORS.green  },
+    { dx:  -90, dy:  -60, cls: 'SMALL',  heading:  45, color: COLORS.red    },
+    { dx:  110, dy:   70, cls: 'LARGE',  heading: 200, color: COLORS.green  },
+    { dx:  -50, dy:  130, cls: 'HELI',   heading:   0, color: COLORS.green  },
+    { dx:   80, dy: -130, cls: 'SMALL',  heading: 135, color: COLORS.grey   },
+  ];
+  for (const p of placements) {
+    const x = cx + p.dx, y = cy + p.dy;
+    if (p.cls === 'HELI') {
+      svgEl.appendChild(svgHeli(x, y, p.color, false));
+    } else {
+      svgEl.appendChild(svgAircraft(x, y, p.heading, AIRCRAFT_SIZES[p.cls], p.color, false));
+    }
+  }
+  host.appendChild(svgEl);
+}
+
+/* =============================================================
+   Section 3 — heading rotation
+   ============================================================= */
+function renderHeadings() {
+  const grid = document.getElementById('heading-grid');
+  grid.innerHTML = '';
+  for (let deg = 0; deg < 360; deg += 45) {
+    const cell = document.createElement('div');
+    cell.className = 'heading-cell';
+    const svgEl = svg('svg', { viewBox: '0 0 80 80', width: 80, height: 80 });
+    svgEl.appendChild(svgAircraft(40, 40, deg, 12, COLORS.green, false));
+    cell.appendChild(svgEl);
+    const lbl = document.createElement('div');
+    lbl.className = 'deg';
+    lbl.textContent = `${deg}°`;
+    cell.appendChild(lbl);
+    grid.appendChild(cell);
+  }
+}
+
+/* =============================================================
+   Toggle handlers
+   ============================================================= */
+let currentSelected = false;
+function setSelected(sel) {
+  currentSelected = sel;
+  document.getElementById('btn-unsel').classList.toggle('active', !sel);
+  document.getElementById('btn-sel').classList.toggle('active', sel);
+  renderCompareGrid(sel);
+  renderRadarStage(sel);
+}
+document.getElementById('btn-unsel').addEventListener('click', () => setSelected(false));
+document.getElementById('btn-sel').addEventListener('click',   () => setSelected(true));
+
+/* =============================================================
+   Initial render
+   ============================================================= */
+renderCompareGrid(false);
+renderRadarStage(false);
+renderHeadings();
+</script>
+
+</body>
+</html>
