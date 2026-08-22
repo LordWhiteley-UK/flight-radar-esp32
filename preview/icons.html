@@ -101,13 +101,13 @@
     font-variant-numeric: tabular-nums;
   }
   .cell .canvas {
-    /* The icon-sized SVG inside sets its own dimensions to match the
-       icon's real extent. We just need this container to centre it
-       and host the faint crosshair guide. */
+    /* Show a faint crosshair so the centre of the icon is obvious.
+       Fixed 80x80 frame; the SVG inside draws the icon at its real
+       pixel size on a viewBox of 0..80, scaled to fill the frame. */
     position: relative;
-    display: inline-block;
+    width: 80px;
+    height: 80px;
     margin: 0 auto;
-    padding: 0;
   }
   .cell .canvas::before,
   .cell .canvas::after {
@@ -418,42 +418,33 @@ function renderCompareGrid(selected) {
     const canvas = cell.querySelector('.canvas');
     canvas.innerHTML = '';
 
-    /* The cell needs to hold the icon at its REAL pixel size plus the
-       selection ring. We compute the bounding radius from the icon's
-       own constants, then size the SVG canvas to match exactly — no
-       zoom, no stretch. This is the difference the user is judging:
-       is size=8 visibly smaller than size=18? */
+    /* Fixed 80×80 frame per cell. The icon is drawn at REAL pixel size
+       on a viewBox of 0..80 so the same math (PX/PY macros) produces
+       the correct endpoint pixels. The visible canvas is 80×80 CSS px.
+       To make the size differences obvious, we also scale the line
+       stroke with the icon size in svgAircraft. */
 
-    let halfExtent;   // px from centre to outermost edge
-    let draw;         // function returning the SVG <g> for this icon
-    let drawSize;
-
+    const svgEl = svg('svg', {
+      viewBox: '0 0 80 80', width: 80, height: 80,
+    });
+    let icon;
     if (cls === 'HELI') {
-      drawSize = HELI_RADIUS;            // not really a "size" but the radius
-      halfExtent = HELI_RADIUS + (selected ? 8 : 4);  // ring is 20 = heliR + 7
-      draw = () => svgHeli(halfExtent, halfExtent, COLORS.green, selected);
+      icon = svgHeli(40, 40, COLORS.green, selected);
     } else {
       const size = AIRCRAFT_SIZES[cls] + (selected ? SELECTED_BUMP : 0);
-      drawSize = size;
-      // Glyph half-extent along heading axis is size * 0.8; line width 2
-      // adds another 1. Selection ring adds 26 (LARGE) / 20 / 16.
-      const ringR = cls === 'SMALL' ? 16 : cls === 'MEDIUM' ? 20 : 26;
-      halfExtent = Math.max(size * 0.8 + 1, ringR + 1);
       const heading = ({ SMALL: 0, MEDIUM: 90, LARGE: 270 })[cls];
-      draw = () => svgAircraft(halfExtent, halfExtent, heading, size, COLORS.green, selected);
+      icon = svgAircraft(40, 40, heading, size, COLORS.green, selected);
     }
-
-    const side = halfExtent * 2 + 2;
-    const svgEl = svg('svg', {
-      viewBox: `0 0 ${side} ${side}`,
-      width: side, height: side,
-    });
-    svgEl.appendChild(draw());
+    svgEl.appendChild(icon);
     canvas.appendChild(svgEl);
 
     /* Update the size label */
     const pxEl = cell.querySelector('.px');
-    pxEl.textContent = String(drawSize);
+    if (cls === 'HELI') {
+      pxEl.textContent = String(HELI_RADIUS);
+    } else {
+      pxEl.textContent = String(AIRCRAFT_SIZES[cls] + (selected ? SELECTED_BUMP : 0));
+    }
   }
 }
 
