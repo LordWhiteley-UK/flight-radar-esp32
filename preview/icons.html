@@ -101,11 +101,13 @@
     font-variant-numeric: tabular-nums;
   }
   .cell .canvas {
-    /* Show a faint crosshair so the centre of the icon is obvious */
+    /* The icon-sized SVG inside sets its own dimensions to match the
+       icon's real extent. We just need this container to centre it
+       and host the faint crosshair guide. */
     position: relative;
-    width: 80px;
-    height: 80px;
+    display: inline-block;
     margin: 0 auto;
+    padding: 0;
   }
   .cell .canvas::before,
   .cell .canvas::after {
@@ -349,7 +351,16 @@ function svg(tag, attrs, ...children) {
 
 function svgAircraft(cx, cy, headingDeg, size, color, selected) {
   const p = aircraftPts(cx, cy, headingDeg, size);
-  const ringRadius = size === 8 ? 16 : size === 12 ? 20 : 26;
+  const ringRadius = size === 8 ? 16 : size === 12 ? 20 : size === 18 ? 26 : 26;
+  /* Scale the line stroke with the icon size so the small glyph isn't
+    // visually dominated by the line weight. The firmware uses
+    // lv_draw_line width=2 at every size, but it doesn't matter much
+    // there because the icons are drawn over a dark radar background
+    // and the eye reads shape, not stroke. In the preview, where the
+    // icons are stacked side-by-side at 1:1 scale, a 2-px stroke on an
+    // 8-px glyph makes it look as fat as a 12-px glyph. Using
+    // max(1, size/8) keeps the visual ratio honest. */
+  const stroke = Math.max(1, size / 8);
   const g = svg('g');
   if (selected) {
     g.appendChild(svg('circle', {
@@ -358,7 +369,7 @@ function svgAircraft(cx, cy, headingDeg, size, color, selected) {
     }));
   }
   const line = (x1, y1, x2, y2) => svg('line', {
-    x1, y1, x2, y2, stroke: color, 'stroke-width': 2,
+    x1, y1, x2, y2, stroke: color, 'stroke-width': stroke,
     'stroke-linecap': 'round',
   });
   g.appendChild(line(...p.nose,   ...p.tail));
@@ -407,33 +418,42 @@ function renderCompareGrid(selected) {
     const canvas = cell.querySelector('.canvas');
     canvas.innerHTML = '';
 
-    /* Each canvas is 80x80 px. We use viewBox 0..80 for everything so
-       the icon is drawn at exactly its pixel size, centred on (40,40).
-       The visible canvas shows the icon plus the faint crosshair. */
-    const svgEl = svg('svg', {
-      viewBox: '0 0 80 80', width: 80, height: 80,
-    });
-    let icon;
+    /* The cell needs to hold the icon at its REAL pixel size plus the
+       selection ring. We compute the bounding radius from the icon's
+       own constants, then size the SVG canvas to match exactly — no
+       zoom, no stretch. This is the difference the user is judging:
+       is size=8 visibly smaller than size=18? */
+
+    let halfExtent;   // px from centre to outermost edge
+    let draw;         // function returning the SVG <g> for this icon
+    let drawSize;
+
     if (cls === 'HELI') {
-      icon = svgHeli(40, 40, COLORS.green, selected);
+      drawSize = HELI_RADIUS;            // not really a "size" but the radius
+      halfExtent = HELI_RADIUS + (selected ? 8 : 4);  // ring is 20 = heliR + 7
+      draw = () => svgHeli(halfExtent, halfExtent, COLORS.green, selected);
     } else {
       const size = AIRCRAFT_SIZES[cls] + (selected ? SELECTED_BUMP : 0);
-      /* Headings: small=90°, medium=180°, large=270°, heli=0° — just
-         to make the row interesting and to confirm the icon points
-         correctly for each size class. */
+      drawSize = size;
+      // Glyph half-extent along heading axis is size * 0.8; line width 2
+      // adds another 1. Selection ring adds 26 (LARGE) / 20 / 16.
+      const ringR = cls === 'SMALL' ? 16 : cls === 'MEDIUM' ? 20 : 26;
+      halfExtent = Math.max(size * 0.8 + 1, ringR + 1);
       const heading = ({ SMALL: 0, MEDIUM: 90, LARGE: 270 })[cls];
-      icon = svgAircraft(40, 40, heading, size, COLORS.green, selected);
+      draw = () => svgAircraft(halfExtent, halfExtent, heading, size, COLORS.green, selected);
     }
-    svgEl.appendChild(icon);
+
+    const side = halfExtent * 2 + 2;
+    const svgEl = svg('svg', {
+      viewBox: `0 0 ${side} ${side}`,
+      width: side, height: side,
+    });
+    svgEl.appendChild(draw());
     canvas.appendChild(svgEl);
 
-    /* Update the size label to show selected-state size too */
+    /* Update the size label */
     const pxEl = cell.querySelector('.px');
-    if (cls === 'HELI') {
-      pxEl.textContent = String(HELI_RADIUS);
-    } else {
-      pxEl.textContent = String(AIRCRAFT_SIZES[cls] + (selected ? SELECTED_BUMP : 0));
-    }
+    pxEl.textContent = String(drawSize);
   }
 }
 
