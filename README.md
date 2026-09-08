@@ -27,8 +27,9 @@ heading, climb rate, and origin country.
   is (turns red after 60s).
 * Adjustable radar radius (10–250 km), adjustable refresh interval (22s
   default), switchable imperial/metric units.
-* First-boot WiFi + OpenSky credential provisioning via the device's
-  built-in softAP and captive portal — no serial cable required.
+* First-boot provisioning entirely on-device: an on-screen WiFi setup
+  screen (pick your network, type the password) plus a one-time web page
+  for your OpenSky API key — no serial console needed.
 
 ---
 
@@ -80,22 +81,27 @@ TOOLCHAIN.md §1.2 for details.
 cd src
 idf.py set-target esp32s3       # only on first run
 idf.py build
-idf.py -p /dev/cu.wchusbserial3110 app-flash    # macOS
-# or: idf.py -p COM3 app-flash                  # Windows
+idf.py -p /dev/cu.wchusbserial3110 flash         # macOS
+# or: idf.py -p COM3 flash                       # Windows
 ```
 
-> **Always use `app-flash`, not `flash`**. The `flash` command wipes
-> the NVS partition that stores your WiFi and OpenSky credentials.
-> See TOOLCHAIN.md §3.2.
+> Use the **full `flash`**, not `app-flash`, for a first install — `flash`
+> writes the bootloader + partition table + app, which a new/erased board
+> needs (without a bootloader the screen stays blank). `flash` does **not**
+> wipe your saved settings (NVS at `0x9000` is untouched) — only
+> `erase-flash` does. After the first full flash, use fast `app-flash` for
+> routine updates. Full walkthrough: **FLASHING_GUIDE.md**.
 
 ### 4. Configure on first boot
 
-1. Connect to the softAP `FlightRadar-Setup` (password: `flightradar`).
-2. Open `http://192.168.4.1/upload` in a browser.
-3. Paste your OpenSky `client_id` and `client_secret`. (Register for
-   free at <https://opensky-network.org/>.)
-4. The board reboots, connects to your home WiFi, and starts drawing
-   aircraft.
+1. After flashing, the on-screen "Select Wi-Fi network" screen appears —
+   tap **your** WiFi, type its password, tap **Connect**. The radar screen
+   loads and shows the board's IP address.
+2. On your phone/laptop (same WiFi), browse to **`http://<board-ip>/`**.
+3. Paste your OpenSky **Client ID** and **Client Secret** (register free
+   at <https://opensky-network.org/>) and click **Save & Reboot**.
+4. The board restarts, reconnects to your home WiFi, and starts drawing
+   aircraft every 22 s.
 
 ### 5. Monitor serial output
 
@@ -119,7 +125,7 @@ version:
 * **One shared state struct** (`gAircraft[200]`) — rebuilt from scratch
   on every fetch. Selection is by ICAO24 hex, not by index.
 * **One HTTP webserver** — for first-boot OpenSky credential
-  provisioning on the softAP.
+  provisioning, served on the LAN at the board's IP when the key is missing.
 * **NVS partition** — stores WiFi creds, OpenSky OAuth2 creds, user
   prefs (units, trail, range, refresh).
 

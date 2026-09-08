@@ -1,319 +1,274 @@
-# Beginner's Guide: Erase & Program the ELECROW ESP32 7" Display (800×480)
+# Flight Tracker — Complete New‑Device Setup Guide
 
-This guide walks you through setting up the toolchain, erasing the board, and flashing the **Flight-Tracker-7** firmware onto an **ELECROW ESP32 7" HMI Advanced IPS Touch Display (800×480)**.
+A **step‑by‑step walkthrough for someone with a brand‑new board**. It assumes
+nothing: no toolchain, no driver, no saved settings. By the end you'll have a
+working radar that talks to **your** W‑Fi and the **OpenSky Network** using
+**your** own API credentials.
 
-The board is an **ESP32-S3** module with:
-- 16 MB QIO flash
-- 8 MB octal PSRAM
-- RGB parallel LCD (800×480)
-- GT911 capacitive touch controller
-- An RTC (BM8563) on I²C (SDA=GPIO15, SCL=GPIO16)
-
-The firmware is an **ESP-IDF** project (not Arduino), built with ESP-IDF **v5.1 or newer**, LVGL 8.4.x, and the `esp_lcd_touch_gt911` driver. The ELECROW 7" panel is the same RGB panel/driver family as the Waveshare 7" RGB LCD, which is why the code uses `waveshare_rgb_lcd_port.c`.
+> **What you end up with:** the device boots to a WiFi setup screen, connects
+> to *your* network, you add your OpenSky API key once over a web page, and a
+> live radar of aircraft near you appears.
 
 ---
 
-## 0. What you'll need
+## How flashing works on this board (read this once)
 
-| Item | Notes |
-|------|-------|
-| ELECROW 7" ESP32 display | USB-C power + data cable connected |
-| A USB-C data cable | Must carry data, not charge-only. Ideally one that can supply ~2 A. |
-| A computer | macOS, Windows, or Linux |
-| ESP-IDF v5.1+ toolchain | See Section 1 |
-| This project folder | `Flight-radar-7-main/src` |
+The flash chip is split into regions. Three are written by the flashing tool
+and one is your personal data:
 
-> ⚠️ Power tip: a 7" RGB LCD draws a lot of current. If your computer's USB port can't keep the board alive during flashing (random resets, "Brownout detector was triggered"), use a powered USB hub or a USB-C wall charger that also passes data, or an external 5 V supply.
+| Offset | Region | What it holds |
+|--------|--------|---------------|
+| `0x0000`  | **Bootloader** | First code the chip runs. |
+| `0x8000`  | **Partition table** | Map of the flash layout. |
+| `0x10000` | **App (firmware)** | The radar app itself (~1.5 MB). |
+| `0x9000`  | **NVS** (your data) | WiFi name/password, OpenSky API key, saved centre/range. |
+
+Three ESP‑IDF commands matter:
+
+| Command | Writes | Wipes your data? |
+|---------|--------|------------------|
+| `erase-flash` | Everything (`0xFF`) | **Yes** — factory‑clean chip. |
+| `flash` | Bootloader + partition table + app | **No.** NVS at `0x9000` is untouched. |
+| `app-flash` | App only | **No.** Fast update when you only changed code. |
+
+**The critical rule for a NEW board:** you must run the **full `flash`** (ideally
+`erase-flash` then `flash`) at least once. It writes the bootloader and
+partition table. If you only run `app-flash` on an erased chip, the app lands
+in flash but the chip has **no bootloader** — it just resets forever and the
+screen stays **blank**. (That's the "I flashed it but the screen is blank"
+trap.) Once the bootloader exists, later re‑flashes can use fast `app-flash`.
+
+There is an old myth floating around this repo that "`flash` wipes your WiFi
+and API settings". It doesn't — only `erase-flash` does. `flash` and
+`app-flash` both leave NVS alone.
 
 ---
 
-## 1. Install ESP-IDF (one time only)
+## Quick checklist
 
-You need ESP-IDF **v5.1.x or newer** (the project requires `>=5.1.0`). Recommended: **v5.1.5** or **v5.3.x** (stable, well-tested with the RGB LCD + PSRAM combo).
+- [ ] ESP‑IDF v5.1+ installed (Section 1)
+- [ ] CH340 driver installed (Section 2)
+- [ ] Board connected, port found (Section 3)
+- [ ] Firmware built (Section 4)
+- [ ] Full flash — bootloader + partitions + app (Section 5)
+- [ ] Board on YOUR WiFi (Section 6)
+- [ ] OpenSky API key entered (Section 7)
+- [ ] Radar drawing aircraft (Section 8)
 
-### macOS (Apple Silicon / Intel)
+---
+
+## 1. Install ESP‑IDF (one time, per computer)
+
+Pick your OS.
+
+**macOS / Linux**
 
 ```bash
-# Install prerequisites
-brew install cmake ninja dfu-util python3
-
-# Download ESP-IDF
-mkdir -p ~/esp
-cd ~/esp
+brew install cmake ninja dfu-util python3      # macOS only; Linux: use your package manager
+mkdir -p ~/esp && cd ~/esp
 git clone --recursive https://github.com/espressif/esp-idf.git -b v5.3.3
 cd esp-idf
 ./install.sh esp32s3
 ```
 
-Then **activate** the environment in every new terminal you use to build/flash:
+Then in **every new terminal** you build/flash in, activate the environment:
 
 ```bash
-. ~/esp/esp-idf/export.sh
+. ~/esp/esp-idf/export.sh     # note the leading dot and space
 ```
 
-(That leading `.` and space are required — it sources the script.)
+**Windows**
 
-### Windows
+Download the official installer from
+<https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/windows-setup.html>.
+Use the **"ESP-IDF Tools Installer"**, then use the **"ESP-IDF PowerShell"**
+shortcut from the Start Menu (it activates the environment for you).
 
-Download the official installer: <https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/windows-setup.html>
-
-Use the **"ESP-IDF Tools Installer"**. After install, use the **"ESP-IDF PowerShell"** or **"ESP-IDF CMD"** shortcut from the Start Menu — it runs `export.bat` for you automatically.
-
-### Linux
-
-```bash
-sudo apt install git wget flex bison gperf python3 python3-pip python3-venv \
-  cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
-mkdir -p ~/esp && cd ~/esp
-git clone --recursive https://github.com/espressif/esp-idf.git -b v5.3.3
-cd esp-idf && ./install.sh esp32s3
-. ./export.sh
-```
-
-### Verify the install
+**Verify**
 
 ```bash
 idf.py --version
 ```
 
-You should see a version line. If `idf.py: command not found`, you forgot to run `export.sh` (macOS/Linux) or open the ESP-IDF terminal (Windows).
+If that prints nothing, you forgot to run `export.sh` (mac/Linux) or launch the
+ESP‑IDF terminal (Windows).
 
 ---
 
-## 2. Find your board's serial port
+## 2. Install the CH340 driver (Windows/macOS only)
 
-Plug the board in via USB-C.
+The board's USB chip is a WCH **CH340**. macOS and Windows don't ship a driver.
 
-**macOS:**
-```bash
-ls /dev/cu.*
-```
-Look for something like `/dev/cu.usbmodem*` or `/dev/cu.SLAB_USBtoUART`.
+- **macOS:** download and install
+  <https://www.wch-ic.com/downloads/CH341SER_MAC_ZIP.html>.
+- **Windows:** download and install
+  <https://www.wch-ic.com/downloads/CH341SER_EXE.html>.
 
-**Linux:**
-```bash
-ls /dev/ttyUSB* /dev/ttyACM*
-```
-Usually `/dev/ttyUSB0`. If you get permission errors, add yourself to the `dialout` group:
-```bash
-sudo usermod -aG dialout $USER
-# then log out and back in
-```
-
-**Windows:** Open Device Manager → *Ports (COM & LPT)* → note the `COMxx`.
-
-> If **nothing** shows up: try a different USB-C cable (charge-only cables are the #1 cause), try a different port, and make sure the board's USB power switch (if it has one) is set to USB/ON.
+Linux needs nothing. If you're on current macOS and the board *does* appear
+without the driver, you can skip this step.
 
 ---
 
-## 3. Configure the project for the board
+## 3. Connect the board and find its port
 
-In a terminal with ESP-IDF active:
+Plug the board into your computer with a **USB‑C cable that carries data**
+(charge‑only cables are the #1 cause of "nothing happens"). The screen is a
+7" RGB panel that draws a lot of current — if the board keeps resetting
+("Brownout detector was triggered"), use a powered hub or a USB‑C phone
+charger that also passes data.
 
-```bash
-cd /Users/jps/Downloads/Flight-radar-7-main/src
-idf.py set-target esp32s3
-```
-
-This writes `sdkconfig` for the ESP32-S3 using the defaults in `sdkconfig.defaults` (16 MB QIO flash, octal PSRAM, RGB LCD tearing-avoidance, etc.). Run it once; you only need to re-run it if you delete `sdkconfig`.
-
-### Optional: review settings in menuconfig
+Find the port:
 
 ```bash
-idf.py menuconfig
+# macOS / Linux
+ls /dev/cu.*     # or: ls /dev/ttyUSB* /dev/ttyACM*
 ```
 
-The relevant menu is **Example Configuration → Display**. The defaults in `sdkconfig.defaults` already match the ELECROW 7" panel, so you usually don't need to change anything. Press `Q` then `Y` to save/exit.
+Look for a `cu.usbserial-*` / `cu.wchusbserial*` or `cu.SLAB_USBtoUART`
+entry — that's the CH340. (On this project's board it's been seen as
+`/dev/cu.wchusbserial1340`.) **Windows:** Device Manager → *Ports (COM & LPT)*
+→ note the `COMxx`.
 
-> The radar range (50 km) and update interval (22 s) are **not** in menuconfig — they're already baked into the code in `main.c` and `radar.c`.
+Use that name everywhere `<PORT>` appears below.
 
 ---
 
-## 4. (Optional) Build first, to catch errors early
+## 4. Build the firmware
 
 ```bash
+cd src                               # repo's src directory
+idf.py set-target esp32s3            # only needed on a fresh workspace
 idf.py build
 ```
 
-This takes a few minutes the first time (it compiles LVGL, the LCD driver, ESP-IDF, and your code). A successful build ends with:
+A good ending looks like:
+
 ```
 Project build complete. To flash, run:
  idf.py flash
-or
- idf.py -p <PORT> flash
 ```
 
-If the build fails, the most common causes are:
-- ESP-IDF not activated (`idf.py: command not found`) → run `export.sh`.
-- Wrong target → run `idf.py set-target esp32s3`.
-- Out-of-space / missing submodule → `git -C $IDF_PATH submodule update --init --recursive`.
+If `idf.py` isn't found, (re)run `export.sh` (mac/Linux) or the ESP‑IDF
+terminal (Windows). If the build fails, `git -C $IDF_PATH submodule update
+--init --recursive` fixes most "missing submodule" cases.
 
 ---
 
-## 5. Erase the flash (factory reset)
+## 5. Flash it (full flash — required on a new board)
 
-This wipes **everything** on the chip: your old app, the WiFi/OpenSky credentials saved in NVS, the saved radar range/lat/lon, and any stored settings. Do this before flashing if you want a truly clean state (recommended the first time you load this firmware, since it also clears any stale `range` NVS value that would otherwise override the new 50 km default).
-
-```bash
-idf.py -p <PORT> erase-flash
-```
-
-Replace `<PORT>` with the port you found in Section 2, e.g.:
-- macOS:   `idf.py -p /dev/cu.usbmodem1101 erase-flash`
-- Linux:   `idf.py -p /dev/ttyUSB0 erase-flash`
-- Windows: `idf.py -p COM5 erase-flash`
-
-You should see:
-```
-Erasing flash (this may take a while)...
-Chip erase completed successfully in Xs
-```
-
-If you see `A fatal error occurred: Failed to connect to ESP32-S3`, see **Troubleshooting** below — the board is likely in a state that needs bootloader-mode entry.
-
----
-
-## 6. Flash the firmware
+For a truly clean, never‑owned‑before board:
 
 ```bash
 idf.py -p <PORT> flash
 ```
 
-This builds (if needed) and writes the firmware to the correct partition offsets from `partitions.csv`:
+That writes all three code regions (bootloader, partition table, app) and
+leaves the data region (NVS) empty — exactly right for a new user who will
+enter their own WiFi and API key. Success looks like:
 
-| Partition | Offset    | Size     | Purpose |
-|-----------|-----------|----------|---------|
-| nvs       | 0x9000    | 0x6000   | WiFi/credentials/saved radar settings |
-| phy_init  | 0xf000    | 0x1000   | PHY calibration |
-| factory   | 0x10000   | 0x600000 | Your app (6 MB) |
-| spiffs    | 0x610000  | 0x9F0000| Filesystem (assets, etc.) |
-
-Flashing takes ~30–90 s. On success:
 ```
 Hash of data verified.
 Hard resetting via RTS pin...
+Done
 ```
 
-The board reboots automatically and the radar UI should appear on the LCD within a few seconds.
+The board reboots and the **WiFi setup screen** appears ("Select Wi‑Fi
+network") — that's the signal it worked.
 
-> Tip — combine erase + flash + monitor in one command:
+> **Optional but thorough:** if you want a factory‑fresh NVS too (say the board
+> was previously used by someone else and might hold their settings), do it in
+> one command instead:
 > ```bash
-> idf.py -p <PORT> erase-flash flash monitor
+> idf.py -p <PORT> erase-flash flash
 > ```
+> `erase-flash` wipes *everything* first, `flash` then puts the three code
+> regions back. **Do NOT** make a habit of `app-flash` on a freshly erased
+> chip — with no bootloader the board won't boot (blank screen).
 
 ---
 
-## 7. Watch what the board is doing (serial monitor)
+## 6. Put the board on YOUR WiFi (on‑screen setup)
+
+After flashing, the board scans for networks and shows them on the touchscreen
+under **"Select Wi‑Fi network"**:
+
+1. Tap **your** WiFi's name from the list.
+2. Tap the password box and type your WiFi password on the on‑screen keyboard.
+3. Tap **Connect**.
+
+The screen switches to the radar once the board joins your network, and your
+WiFi name/password are saved in NVS (shown at the top of the radar screen).
+The board will reconnect automatically on every power‑on from now on.
+
+If you ever want to re‑pick a network, use the **"Forget WiFi"** option in the
+menu — it clears the saved credentials and returns you to this setup screen.
+
+---
+
+## 7. Add your OpenSky API key (one‑time, over a web page)
+
+The OpenSky API needs free credentials to show live aircraft. You only need
+them **once** — after that the board keeps them in NVS.
+
+1. **Get your key:** go to <https://opensky-network.org/>, register a free
+   account, verify your email, then in **My OpenSky → Applications** create an
+   application. It gives you two strings: a **Client ID** and a **Client
+   Secret**.
+2. **Find the board's IP:** after WiFi connects, the radar screen shows the
+   board's IP address (top of the screen, e.g. `192.168.0.33`). If you missed
+   it, check your router's "connected devices" page.
+3. **On your phone or laptop** — on the *same WiFi* — open a browser and go to
+   **`http://<board-ip>/`** (that IP from step 2, e.g. `http://192.168.0.33/`).
+   You'll get the Flight Tracker config page.
+4. Paste your **Client ID** and **Client Secret** into the two boxes and click
+   **Save & Reboot**.
+
+The board restarts, connects to WiFi, and the radar starts pulling live
+aircraft near you every 22 seconds. The config page only works while the board
+is missing an API key — once you save one, it stops serving the page.
+
+> The old "softAP / captive portal named FlightRadar-Setup" flow you may read
+> about elsewhere **does not exist** in this firmware. The config page is
+> served over your home WiFi at the board's own IP.
+
+---
+
+## 8. Verify it's actually working
+
+- The radar dial sweeps and little aircraft glyphs appear (green for most
+  types, sized by aircraft category).
+- A small **"API: …"** label near the radar shows how old the data is and
+  ticks up to 22 s between refreshes.
+- Tap an aircraft → its callsign/altitude/speed appear on the right rail.
+- If the screen says "Disconnected" at the top, the board lost WiFi. If the
+  dial is empty and only the center stays, your OpenSky key may be wrong
+  (`Settings → Forget OpenSky API` to redo it).
+
+---
+
+## 9. Re‑flashing later (updating the firmware only)
+
+Once the bootloader exists (i.e. you've already done a full `flash`), you can
+update just the app without touching your WiFi/API settings:
 
 ```bash
-idf.py -p <PORT> monitor
+idf.py build
+idf.py -p <PORT> app-flash
 ```
 
-This opens a live log stream from the ESP32-S3. You'll see WiFi connect attempts, OpenSky API requests, and radar updates. Useful for confirming the new **22 s** interval and **50 km** range are active — you'll see an API fetch roughly every 22 seconds.
-
-Useful monitor shortcuts:
-- `Ctrl-]` — exit the monitor
-- `Ctrl-T Ctrl-H` — help / list all shortcuts
-- The monitor auto-resets the board on exit
-
-Exit with `Ctrl-]` when done.
+Watch the log with `idf.py -p <PORT> monitor` (exit with `Ctrl-]`).
 
 ---
 
-## 8. First-run setup on the device
+## Common problems
 
-After flashing and erasing, NVS is empty, so the app starts with:
-- Default center: lat `13.1993`, lon `77.7067`
-- Default range: **50 km**
-- No WiFi credentials (until you set them)
-- Update interval: **22 s**
-
-The firmware includes a web server (`webserver.c`) for entering WiFi and OpenSky credentials over a captive-style page — see the project's own README/UI for the exact flow, since that part is device-specific. Once WiFi is up and OpenSky credentials are saved, the radar will start pulling live traffic every 22 s.
-
----
-
-## 9. Common workflows (quick reference)
-
-```bash
-# Activate ESP-IDF (each new terminal)
-. ~/esp/esp-idf/export.sh
-
-# Go to project
-cd /Users/jps/Downloads/Flight-radar-7-main/src
-
-# One-time: set target
-idf.py set-target esp32s3
-
-# Clean erase + flash + watch
-idf.py -p <PORT> erase-flash flash monitor
-
-# Just rebuild after editing code
-idf.py build && idf.py -p <PORT> flash
-
-# Monitor only
-idf.py -p <PORT> monitor
-```
-
----
-
-## 10. Troubleshooting
-
-### "A fatal error occurred: Failed to connect to ESP32-S3"
-The chip isn't responding to the auto-reset. Fixes, in order:
-1. Hold **BOOT** on the board, tap **RESET**, then release **BOOT** — this forces download mode. Retry the command.
-2. Try `idf.py -p <PORT> erase-flash --baud 115200` (slower is more reliable on flaky cables).
-3. Swap the USB-C cable for one you **know** carries data.
-
-### Brownout / random resets during flash or boot
-The RGB LCD + PSRAM pull a lot of current. Use a powered USB hub or a USB-C charger that also passes data. Brownout logs look like:
-```
-Brownout detector was triggered
-```
-
-### The LCD stays dark / shows garbage
-- Confirm `CONFIG_IDF_TARGET="esp32s3"` is set (run `idf.py set-target esp32s3` again).
-- The ELECROW 7" uses the Waveshare-compatible RGB pinout; the defaults in `sdkconfig.defaults` already match. If you changed LCD options in menuconfig, revert them or re-apply defaults from `sdkconfig.defaults`.
-
-### Touch doesn't work
-The GT911 touch driver (`esp_lcd_touch_gt911`) needs I²C and an interrupt/RESET pin wired per the board. If touch is dead but the display is fine, double-check the board's I²C pull-ups and that no menuconfig option disabled I²C. On a clean re-flash it should enumerate automatically.
-
-### NVS keeps loading the old range
-Erasing the flash (Section 5) clears NVS. If you skipped the erase and the app still shows 100 km, run `idf.py -p <PORT> erase-flash` then re-flash. You can also set 50 km through the on-screen UI's range control so the new value is saved.
-
-### `idf.py: command not found`
-You didn't activate ESP-IDF in *this* terminal. Run `. ~/esp/esp-idf/export.sh` (macOS/Linux) or open the ESP-IDF terminal shortcut (Windows).
-
-### Port disappears / flaky enumeration
-- Avoid USB hubs without power; use a direct port or powered hub.
-- On macOS, kill any other process holding the port (e.g. a previous `monitor`).
-- Re-plug the cable.
-
-### Flash size / partition errors
-This project uses a 16 MB flash layout. If your specific ELECROW board has a different flash size, the build/flash will warn. Confirm with:
-```bash
-esptool.py --port <PORT> flash_id
-```
-It prints `Detected flash size: 16 MB` (or similar). If it's not 16 MB, edit `sdkconfig.defaults` → `CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y` and the `factory`/`spiffs` sizes in `partitions.csv` to match.
-
----
-
-## 11. Where things live in this project (cheat sheet)
-
-| File | Role |
-|------|------|
-| `src/sdkconfig.defaults` | Board defaults: ESP32-S3, 16 MB QIO flash, octal PSRAM, RGB tearing-avoidance |
-| `src/partitions.csv` | Flash layout (nvs / phy / factory / spiffs) |
-| `src/main/main.c` | App entry, WiFi, radar update task (interval), range default |
-| `src/main/radar.c` | Radar drawing + display radius |
-| `src/main/opensky_client.c` | OpenSky API client |
-| `src/main/waveshare_rgb_lcd_port.c` | RGB LCD + touch init (ELECROW-compatible) |
-| `src/main/lvgl_port.c` | LVGL porting layer |
-| `src/main/webserver.c` | Web config server (WiFi/credentials) |
-
-Changed in this session:
-- Update interval: 15 s → **22 s** (`main.c`)
-- Radar range: 100 km → **50 km** (`main.c` defaults + `radar.c` display radius)
-
----
-
-Happy flashing! If a step fails, the serial monitor (`idf.py monitor`) is your best friend — it tells you exactly what the board is doing and where it got stuck.
+| Symptom | Cause & fix |
+|---------|-------------|
+| `Failed to connect to ESP32-S3` | Board not entering download mode. Hold **BOOT**, tap **RESET**, release **BOOT**, retry. |
+| Screen blank after `app-flash` on a fresh chip | No bootloader was ever written. Run the full `idf.py flash` (Section 5). |
+| Random resets / "Brownout detector was triggered" | 7" panel needs more current. Use a powered hub or a data‑passing USB‑C charger. |
+| `idf.py: command not found` | Run `. ~/esp/esp-idf/export.sh` (mac/Linux) or the ESP‑IDF terminal (Windows) in this shell. |
+| Port disappeared | Try another cable (data!), another port, and close any program holding the port (e.g. a previous `monitor`). |
+| WiFi never connects | Wrong password, or the 2.4 GHz band is off. The board only supports 2.4 GHz. |
+| Radar empty / "Has creds: 0" | OpenSky key not saved yet — do Section 7. |
+| Old settings appear on "new" board | Someone flashed it before. `idf.py -p <PORT> erase-flash flash` for a clean slate. |

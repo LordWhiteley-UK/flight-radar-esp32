@@ -161,26 +161,39 @@ Cold build (first time): 5–10 min. Warm build (only `radar.c` changed):
 The output binary is `build/lvgl_porting.bin` (≈ 1.5 MB). The bootloader,
 partition table, and the app image are merged into it by the build.
 
-### 4.3 Flash — preserve NVS
+### 4.3 Flash — what preserves what
+
+First install on a **new/erased** board MUST be the full command so the
+bootloader + partition table are written:
+
+```bash
+idf.py -p /dev/cu.wchusbserial1340 flash
+```
+
+`flash` writes bootloader (`0x0`), partition table (`0x8000`) and the app
+(`0x10000`). It does **NOT** touch NVS (`0x9000`) — verified on real
+hardware 2026-09-08 — so WiFi/OpenSky credentials survive a full `flash`.
+Only `erase-flash` clears NVS.
+
+For routine app updates once the bootloader exists, `app-flash` writes only
+the app image and is faster:
 
 ```bash
 idf.py -p /dev/cu.wchusbserial1340 app-flash
 ```
 
-**Always `app-flash`, never `flash`.** The plain `flash` command overwrites
-the NVS partition that stores WiFi and OpenSky OAuth2 credentials — the
-user has to re-provision after every flash. `app-flash` only writes the
-app image at `0x10000`.
+> Don't `app-flash` a freshly-erased chip: with no bootloader the board
+> never boots and the screen just stays blank.
 
-If `idf.py -p /dev/cu.wchusbserial1340 app-flash` ever fails to enumerate,
+If `idf.py -p /dev/cu.wchusbserial1340 <flash>` ever fails to enumerate,
 find the port with `ls /dev/cu.wchusbserial*` and substitute. On Windows
-it's `idf.py -p COM<n> app-flash`.
+it's `idf.py -p COM<n> flash`.
 
 ### 4.4 Erase everything (factory reset)
 
 ```bash
-idf.py -p /dev/cu.wchusbserial1340 erase-flash
-idf.py -p /dev/cu.wchusbserial1340 flash      # full re-flash, wipes NVS
+idf.py -p /dev/cu.wchusbserial1340 erase-flash     # clears NVS (WiFi + OpenSky creds)
+idf.py -p /dev/cu.wchusbserial1340 flash           # then full re-flash of the code
 ```
 
 Use this when NVS has become corrupted, the user changed their OpenSky
@@ -231,7 +244,7 @@ A one-screen picture (full version in `ARCHITECTURE.md`):
 ```
 +---------------------------+        +---------------------------+
 |  HTTP webserver (task)    |        |  OpenSky fetch (task)     |
-|  Port 80, softAP + STA    |        | 22 s polling w/ OAuth2    |
+|  Port 80, STA (LAN) only  |        | 22 s polling w/ OAuth2    |
 |  Stores creds in NVS      |        | Parses JSON → gAircraft[] |
 +-------------+-------------+        +-------------+-------------+
               |                                    |
@@ -498,24 +511,29 @@ widgets.
 The `Save*` functions are called by event handlers in `ui_events.c` and
 `ui_Screen3.c` whenever the user changes a value.
 
-> **NVS survives `app-flash`.** It only gets wiped by `erase-flash` or
-> `flash`. Always use `app-flash` unless you actually want to wipe it.
+> **NVS survives both `flash` and `app-flash`** — verified on hardware
+> 2026-09-08. NVS sits at `0x9000`; neither command writes it. The only way
+> to wipe NVS is `erase-flash`. Use the full `flash` for first installs and
+> `app-flash` for routine app updates.
 
 ---
 
 ## 10. First-boot provisioning
 
-`src/main/webserver.c` — the board has no keyboard on first boot, so the
-firmware starts an HTTP server. Three routes:
+`src/main/webserver.c` — there is **no softAP**. On first boot the board
+uses the on-screen Screen2 WiFi picker to join **your** WiFi (SSID list +
+password, saved to NVS once connected). If OpenSky credentials are then
+missing, the firmware starts the web server on the LAN interface and flashes
+a "config required" dialog:
 
 | Route     | Method | Purpose                                                                 |
 |-----------|--------|-------------------------------------------------------------------------|
-| `/`       | GET    | Status page: SSID, IP, current config, time-since-last-fetch.         |
-| `/upload` | POST   | Form submit of `client_id` and `client_secret`. Saved to NVS. Restart. |
-| `/clear`  | GET    | Wipes the WiFi and OpenSky credentials. Forces re-provisioning.        |
+| `/`       | GET    | Config form: paste Client ID + Client Secret, click **Save & Reboot**. |
+| `/upload` | POST   | Accepts the JSON body `{clientId, clientSecret}`, saves to NVS, restarts. |
+| `/clear`  | POST   | Forgets the OpenSky credentials (`platform_forget_opensky_creds`), restarts. |
 
-First boot brings up a softAP `FlightRadar-Setup` (password `flightradar`)
-at `http://192.168.4.1/upload`.
+Reach it from your phone/laptop at `http://<board-ip>/` (the IP is shown on
+the radar screen). The page stops being served once credentials are saved.
 
 ---
 

@@ -192,22 +192,29 @@ ESP-IDF has two flash commands:
 
 | Command       | What it does                                                                |
 |---------------|-----------------------------------------------------------------------------|
-| `idf.py flash`        | Writes bootloader + partition table + **app image + NVS**. Wipes NVS.       |
-| `idf.py app-flash`    | Writes bootloader + partition table + **app image only**. Preserves NVS.    |
+| `idf.py flash`        | Writes bootloader (`0x0`) + partition table (`0x8000`) + app image (`0x10000`). **Does NOT touch NVS** (`0x9000`). Mandatory first flash on a new/erased board. |
+| `idf.py app-flash`    | Writes **app image only**. Fast routine update once the bootloader exists.   |
+| `idf.py erase-flash`  | Erases the WHOLE chip to `0xFF` — including NVS (WiFi + OpenSky creds).      |
 
-**Always use `app-flash`**, not `flash`. The `flash` command will wipe your
-WiFi credentials and OpenSky API client_id/secret, forcing you to re-enter
-them via the web UI on the next boot.
+**For a brand-new board, always run the full `flash`** — it writes the
+bootloader + partition table, which an erased chip needs to boot at all
+(`app-flash` alone on a blank chip leaves no bootloader and the screen stays
+blank). Only `erase-flash` wipes your WiFi/OpenSky credentials; `flash` and
+`app-flash` leave them intact. Full walkthrough: **FLASHING_GUIDE.md**.
 
 ```bash
-# Correct — preserves NVS
+# New / erased board — full flash (bootloader + partitions + app)
+idf.py build
+idf.py -p /dev/cu.wchusbserial3110 flash
+
+# Routine app update after the bootloader exists — fast, keeps credentials
 idf.py -p /dev/cu.wchusbserial3110 app-flash
 
 # macOS — wrong port name? Find it:
 ls /dev/cu.wchusbserial*
 
 # Windows — correct form
-idf.py -p COM3 app-flash          # adapt to your COM port number
+idf.py -p COM3 flash           # adapt to your COM port number
 ```
 
 If you ever need to do a full erase (e.g. to fix a corrupted NVS):
@@ -320,21 +327,23 @@ idf.py menuconfig
 
 ## 7. First-boot configuration
 
-The board has no UI on the first boot because it has no WiFi credentials
-and no OpenSky API client_id/secret. The flow is:
+First boot happens on the **touchscreen** — the board has no softAP. The
+flow is:
 
-1. **Boot**: the firmware starts the WiFi manager in default-nothing mode
-   and starts an HTTP webserver on `http://192.168.4.1/` (the board's
-   softAP).
-2. **Connect to the softAP** from your phone or laptop. The SSID is
-   `FlightRadar-Setup` and the password is `flightradar`.
-3. The captive portal opens at `http://192.168.4.1/`. Three sub-pages:
-   * `/` — Status (IP address, current configuration)
-   * `/upload` — Paste your OpenSky `client_id` and `client_secret`. These
-     are stored in NVS and used on every subsequent boot.
-   * `/clear` — Wipe the stored NVS credentials (forces re-provisioning).
-4. Once the credentials are in NVS, the board connects to your home WiFi
-   and starts fetching from OpenSky.
+1. **Boot**: with no saved network, the firmware shows the WiFi setup
+   screen ("Select Wi-Fi network") and scans for nearby networks.
+2. **On the board**: tap your WiFi's SSID, type its password on the on-screen
+   keyboard, tap **Connect**. The board joins your WiFi (2.4 GHz), saves the
+   credentials to NVS, and loads the radar screen.
+3. **On your phone/laptop** (same WiFi): open a browser at
+   `http://<board-ip>/` — the IP is shown at the top of the radar screen.
+   The config page has two routes:
+   * `/` — a simple form: paste your OpenSky **Client ID** and **Client
+     Secret**, click **Save & Reboot**. (Also accepts a raw JSON `POST` of
+     `{clientId, clientSecret}` to `/upload`.)
+   * `/clear` — erase the stored OpenSky credentials (forces re-provisioning).
+4. The board reboots, reconnects to your WiFi, and starts fetching from
+   OpenSky every 22 s.
 
 ### 7.1 OpenSky API credentials
 
@@ -344,7 +353,8 @@ You need a free OpenSky Network account and OAuth2 client credentials:
 2. Sign in and go to **Account → API Access → My API access**.
 3. Click **Create client** and copy the resulting `client_id` and
    `client_secret`.
-4. Paste them into the `/upload` page on the board's softAP.
+4. Paste them into the form at `http://<board-ip>/` (the IP shown on the
+   radar screen) and click **Save & Reboot**.
 
 The OAuth2 token has a 1-hour lifetime; the firmware handles refresh
 internally.
@@ -367,7 +377,7 @@ internally.
 | Board boots but shows garbled LCD                | Wrong `sdkconfig` flash mode. The Elecrow panel needs `FLASH_MODE_DIO`, `FLASH_FREQ_80M`, `FLASH_SIZE_16MB`. Run `idf.py menuconfig` and check *Serial flasher config*. |
 | Board boots but loop-crashes with `Guru Meditation Error` | Check `idf.py monitor` for the offending task. Common culprits: out-of-memory in the OpenSky fetch task (heap < 30 KB), or a NULL pointer in `Radar_DrawAircraft` when `gAircraftCount = 0`. |
 | WiFi keeps disconnecting                        | 2.4 GHz network only. The ESP32-S3 does NOT support 5 GHz.                                                                        |
-| OpenSky returns 401 Unauthorized                 | Bad `client_id` / `client_secret`. Visit `/clear` on the softAP, then `/upload` to re-enter.                                       |
+| OpenSky returns 401 Unauthorized                 | Bad `client_id` / `client_secret`. Visit `http://<board-ip>/clear`, then re-enter them at `http://<board-ip>/`.                    |
 
 ---
 

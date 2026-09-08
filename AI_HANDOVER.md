@@ -54,11 +54,17 @@ export IDF_PATH="/Users/jps/esp/esp-idf"
 export PATH="/Users/jps/.espressif/python_env/idf5.3_py3.10_env/bin:$PATH"
 source $IDF_PATH/export.sh
 idf.py build
-idf.py -p /dev/cu.wchusbserial1340 app-flash     # ALWAYS app-flash, never flash
+idf.py -p /dev/cu.wchusbserial1340 flash     # full flash: bootloader + partitions + app
 ```
 
-**`app-flash` preserves the NVS partition** (WiFi creds, OpenSky
-client_id/secret, user prefs). Plain `flash` wipes it. Monitor with
+**First install on a new/erased board MUST be the full `flash`** (bootloader
++ partition table + app). `app-flash` alone on an erased chip leaves no
+bootloader → the board never boots, screen stays blank. For routine app
+updates after the bootloader exists, `app-flash` is fine and fast.
+
+**NVS facts (verified on real hardware 2026-09-08):** `flash` does **not**
+wipe NVS (WiFi creds, OpenSky client_id/secret, user prefs live at `0x9000`,
+which `flash` never writes). Only `erase-flash` clears NVS. Monitor with
 `idf.py -p /dev/cu.wchusbserial1340 monitor` (Ctrl-] to exit).
 
 ## CURRENT ICON SIZE SCHEME (anchored on medium = 12 px)
@@ -162,14 +168,27 @@ flashing the board.
 | `opensky` | `client_id`, `client_secret`               |
 | `radar`   | `lat`, `lon`, `range`, `units`, `refresh`, `trail` |
 
-`app-flash` preserves NVS; `flash` or `erase-flash` wipes it.
+`flash` preserves NVS; only `erase-flash` wipes it.
 
-## FIRST-BOOT PROVISIONING
+## FIRST-BOOT PROVISIONING (no softAP — verified 2026-09-08)
 
-SoftAP `FlightRadar-Setup` / password `flightradar` at
-`http://192.168.4.1/upload`. Routes: `/` (status), `/upload` (paste
-OpenSky client_id/secret), `/clear` (wipe NVS). OAuth2 token auto-
-refreshed 60 s before expiry.
+There is **no softAP** in this firmware. First-boot goes:
+
+1. Fresh boot → Screen2 ("Select Wi-Fi network") shows a scan of local
+   networks. User taps their SSID, types the password, taps **Connect**.
+   (This path only works because `ScanWifiNetworks` falls through to the
+   scan when no credentials are saved — it used to hardcode "VM_SILVER" /
+   "Millie2021!", which was removed.)
+2. On STA-connected the board saves the creds (`wifi` namespace), loads
+   Screen1, and — if no OpenSky creds — starts the webserver on the LAN.
+3. User browses to `http://<board-ip>/` (IP shown on screen). Routes:
+   `/` serves a friendlier two-field **Client ID / Client Secret** form,
+   `/upload` accepts the JSON `{clientId, clientSecret}` it posts (and
+   still accepts the old raw JSON upload), `/clear` forgets the OpenSky
+   creds and restarts.
+4. Board reboots and starts pulling aircraft every 22 s.
+
+OAuth2 token auto-refreshed 60 s before expiry.
 
 ## RECENT COMMIT HISTORY
 
@@ -206,7 +225,9 @@ avoid title collision). Data label y-offset: `-2` inside the card.
 **Refresh interval:** `main.c::radar_update_timer_cb` — change the 22 s.
 OpenSky auth limit is 4000 req/day; 22 s = ~3900/day.
 
-**Always end with:** `idf.py build && idf.py -p /dev/cu.wchusbserial1340 app-flash`
+**End every code change with:** `idf.py build && idf.py -p /dev/cu.wchusbserial1340 app-flash`
+(once the bootloader exists; first-ever flash on a clean board is the full
+`idf.py flash`).
 
 ## TROUBLESHOOTING
 
@@ -214,8 +235,8 @@ OpenSky auth limit is 4000 req/day; 22 s = ~3900/day.
 |---------|-----|
 | Board won't enumerate | Hold BOOT, tap RST, release BOOT. Check `/dev/cu.wchusbserial*`. |
 | `Brownout detector was triggered` | Powered USB hub or wall adapter. 7" RGB LCD draws a lot. |
-| NVS asks for credentials after flash | You ran `flash` instead of `app-flash`. |
-| OpenSky returns 401 | Visit `/clear` then `/upload` on the softAP. |
+| OpenSky creds missing after flash | You ran `erase-flash` (that's what clears NVS). Re-enter via the WiFi setup then `http://<board-ip>/`. |
+| OpenSky returns 401 | Visit `http://<board-ip>/clear` then re-submit the key at `http://<board-ip>/`. |
 | OpenSky returns 429 | Polling too fast or no OAuth2 credentials. |
 | Stale aircraft | `RadarPredictTask` dead — check `app_state.c`. |
 

@@ -344,39 +344,14 @@ void ScanWifiNetworks(void)
             false);
         return;
     }
-    else
-    {
-        ESP_LOGI(
-            "WIFI",
-            "No saved credentials; using default VM_SILVER");
 
-        snprintf(
-            bootSSID,
-            sizeof(bootSSID),
-            "VM_SILVER");
-
-        snprintf(
-            bootPass,
-            sizeof(bootPass),
-            "Millie2021!");
-
-        SaveWifiCredentials(
-            bootSSID,
-            bootPass);
-
-        ConnectToWifi(
-            bootSSID,
-            bootPass);
-
-        lv_scr_load_anim(
-            ui_Screen1,
-            LV_SCR_LOAD_ANIM_FADE_IN,
-            300,
-            0,
-            false);
-
-        return;
-    }
+    /* No saved network: first boot on a brand-new device (or the user just
+       tapped "Forget WiFi"). Do NOT fall back to a hardcoded network — that
+       would silently bind a new owner to someone else's WiFi. Stay on the
+       Screen2 WiFi setup and let the user pick their own SSID. The scan
+       below fills uic_ContainerSSIDs, and the Connect button saves the
+       chosen credentials once ESP connects. */
+    ESP_LOGI(WIFI_TAG, "No saved credentials; showing WiFi setup on Screen2");
 
     wifi_scan_config_t scan_config =
         {
