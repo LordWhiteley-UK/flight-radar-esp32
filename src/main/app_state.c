@@ -131,6 +131,14 @@ void setUICoords(void)
         snprintf(buf, sizeof(buf), "%.4f\n%.4f", (double)radarLat, (double)radarLon);
         lv_label_set_text(uic_LabelCoords, buf);
 
+        /* radar-panel loc readout (main screen) — snprintf, not
+           lv_label_set_text_fmt: LVGL's printf has no %f support */
+        if (ui_RadarLoc) {
+            snprintf(buf, sizeof(buf), "Loc: %.4f, %.4f",
+                     (double)radarLat, (double)radarLon);
+            lv_label_set_text(ui_RadarLoc, buf);
+        }
+
         if (uic_LabelRange)
             lv_label_set_text_fmt(uic_LabelRange, "Range: %d km", (int)radarRangeKm);
 

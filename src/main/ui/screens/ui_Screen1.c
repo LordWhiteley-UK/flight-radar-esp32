@@ -6,6 +6,8 @@
 #include "../ui.h"
 #include "main.h"   /* GetRadarRange, GetRefreshInterval */
 
+#include <stdio.h>
+
 lv_obj_t * uic_KeyboardCoord;
 lv_obj_t * uic_TextLon;
 lv_obj_t * uic_TextLat;
@@ -338,7 +340,10 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_x(ui_RadarLoc, 12);
     lv_obj_set_y(ui_RadarLoc, -8);
     lv_obj_set_align(ui_RadarLoc, LV_ALIGN_BOTTOM_LEFT);
-    lv_label_set_text(ui_RadarLoc, "Loc: 0.0000, 0.0000");
+    char loc_buf[48]; /* snprintf, not set_text_fmt: LVGL printf has no %f */
+    snprintf(loc_buf, sizeof(loc_buf), "Loc: %.4f, %.4f",
+             (double)GetRadarLat(), (double)GetRadarLon());
+    lv_label_set_text(ui_RadarLoc, loc_buf);
     lv_obj_set_style_text_color(ui_RadarLoc, lv_color_hex(0xA8A8A8), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_RadarLoc, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
 
