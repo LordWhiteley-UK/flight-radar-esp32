@@ -384,7 +384,9 @@ ui_Screen1 (LV_OBJ, 1024×600)
 │   ├── ui_Imageradar (460×460, the actual radar canvas)
 │   ├── ui_RadarTitle (top-left)
 │   ├── ui_LabelClock (top-left, below title)
-│   ├── ui_RadarLoc (bottom-left, "Loc: 0.0000, 0.0000")
+│   ├── ui_RadarLoc (bottom-left, "Loc: <lat>, <lon>" — live radar-centre
+│   │                readout, initialised from NVS at screen build and
+│   │                refreshed by app_state.c::setUICoords)
 │   ├── ui_LabelAPIRefreshBig (bottom-right, "API: 12s")
 │   ├── ui_LabelWaitingBanner (centred, hidden after first fetch)
 │   └── ui_ContainerLegend (top-right, 4 colour swatches)
@@ -546,9 +548,10 @@ NVS — credentials are loaded from `../flightradar_sim_config.json`.
 1. **`idf.py flash` does NOT wipe NVS** (verified on hardware 2026-09-08 —
    NVS at `0x9000` is untouched; only `erase-flash` clears it). Use the
    full `flash` first, `app-flash` for routine updates.
-2. **The 22-second refresh is not configurable**. The OpenSky client polls
-   on a fixed interval determined by the firmware build. To change it,
-   add a "refresh interval" config to NVS and read it in `main.c`.
+2. **The refresh interval is configurable** (5 s minimum, 22 s default,
+   persisted in NVS under `radar`/`refresh` and editable from the
+   settings panel). OpenSky's 4000/day authenticated budget still
+   applies: polling below ~22 s for a full day will exceed it.
 3. **The trail stops at the radar rim**. The trail polyline is clipped to
    the radar disc; if the aircraft leaves the radar area, the trail tail
    stops at the rim and resumes when the aircraft comes back.
@@ -562,6 +565,13 @@ NVS — credentials are loaded from `../flightradar_sim_config.json`.
    include `FLASH_MODE_DIO`, `FLASH_FREQ_80M`, `FLASH_SIZE_16MB`. If you
    ever reset the config, run `idf.py menuconfig` and check
    *Serial flasher config*.
+7. **`lv_label_set_text_fmt()` has no `%f` support** (hit on hardware
+   2026-09-09 — a `%.4f` rendered as a literal `f`, i.e. "Loc: f, f").
+   LVGL's built-in printf omits float handling unless
+   `LV_SPRINTF_USE_FLOAT` is enabled, which this project does not set.
+   For floats, `snprintf()` into a buffer and use `lv_label_set_text()`
+   — the pattern `setUICoords()` uses for both the settings coords label
+   and the main-screen Loc readout.
 
 ---
 

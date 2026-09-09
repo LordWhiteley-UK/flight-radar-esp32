@@ -168,6 +168,7 @@ board.
 | Position dead-reckon between fetches   | `src/main/radar.c::Radar_PredictAircraft`                                    |
 | Capture UI handler                     | `src/main/ui/ui_events.c::Radar_TapSelect`                                   |
 | Right-rail info card                   | `src/main/app_state.c::UpdateSelectedAircraftUI`                              |
+| Radar-centre "Loc:" readout            | `src/main/app_state.c::setUICoords` (+ label init in `ui_Screen1.c`)          |
 | API-age label                          | `src/main/app_state.c::AppState_UpdateAgeLabel`                               |
 | First-boot webserver                   | `src/main/webserver.c`                                                       |
 | CH340 reboot + app-flash               | `src/main/main.c::app_main` (then `idf.py -p ... app-flash`)                |

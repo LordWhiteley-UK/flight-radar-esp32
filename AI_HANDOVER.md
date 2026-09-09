@@ -132,6 +132,9 @@ azimuth are at 25/50/75/100% of the radius.
    honour this stride.
 5. **`platform_lvgl_lock` is recursive.** Safe to call `Radar_Refresh`
    from inside another LVGL timer callback.
+6. **`lv_label_set_text_fmt()` has no `%f`** (hit on hardware 2026-09-09:
+   `%.4f` rendered as literal `f` → "Loc: f, f"). Use `snprintf()` +
+   `lv_label_set_text()` for floats — see `setUICoords()`.
 
 ## VISIBLE USER STRINGS
 
@@ -193,6 +196,9 @@ OAuth2 token auto-refreshed 60 s before expiry.
 ## RECENT COMMIT HISTORY
 
 ```
+3984fdb  Docs: live Loc readout, LVGL %f gotcha, refresh-interval correction
+83dbfb8  Fix main-screen Loc readout stuck at 0.0000
+9d3d847  New-device provisioning: remove hardcoded WiFi fallback; correct flash docs
 69fb925  Preview: revert side-by-side to fixed 80x80 cells, keep stroke scaling
 58e40bc  Preview: render icons at real pixel size, scale stroke with icon
 e1281a7  Add preview/icons.html: local side-by-side glyph size preview
