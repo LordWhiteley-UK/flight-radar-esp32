@@ -196,7 +196,7 @@ OAuth2 token auto-refreshed 60 s before expiry.
 ## RECENT COMMIT HISTORY
 
 ```
-3984fdb  Docs: live Loc readout, LVGL %f gotcha, refresh-interval correction
+91cb464  Docs: live Loc readout, LVGL %f gotcha, refresh-interval correction
 83dbfb8  Fix main-screen Loc readout stuck at 0.0000
 9d3d847  New-device provisioning: remove hardcoded WiFi fallback; correct flash docs
 69fb925  Preview: revert side-by-side to fixed 80x80 cells, keep stroke scaling
