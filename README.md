@@ -10,7 +10,7 @@ heading, climb rate, and origin country.
 > the back, two FreeRTOS tasks, three LVGL timers, one HTTP webserver for
 > first-boot provisioning.
 
-![overview](docs/Screen_Shot.png)
+![overview](docs/Screen_Shot.jpg)
 
 ---
 
